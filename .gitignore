@@ -1,0 +1,31 @@
+# Dependencies
+/frontend/node_modules
+/backend/__pycache__
+/backend/venv
+
+# Production
+/frontend/build
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Cache files
+.cache
+*.pyc
+
+# IDE
+.vscode
+.idea
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database
+*.db
+*.sqlite3
