@@ -1,365 +1,204 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import CodeEditor from './CodeEditor';
-import BeltProgressTracker from './BeltProgressTracker';
-import SenseiHelp from './SenseiHelp';
+import AceEditor from 'react-ace';
+
+import 'ace-builds/src-noconflict/mode-python';
+import 'ace-builds/src-noconflict/theme-monokai';
 
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  padding: 2rem;
-  max-width: calc(100vw - 40px);
-  margin: 0 auto;
-  padding-right: calc(clamp(280px, 25vw, 400px) + 40px);
-  
-  @media (max-width: 1200px) {
-    padding-right: 340px;
-  }
-`;
-
-const LessonContent = styled.div`
-  display: flex;
-  gap: 2rem;
-  margin-top: 1rem;
-  width: 100%;
-  max-width: 1200px;
-`;
-
-const ContentPanel = styled.div`
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  min-height: 0;
+  background: #1e1e1e;
+  color: #fff;
 `;
 
-const ExercisePanel = styled.div`
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`;
-
-const EditorPanel = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`;
-
-const EditorHeader = styled.div`
+const TopBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-
-  h3 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
+  padding: 20px;
+  border-bottom: 1px solid #333;
 `;
 
-const ConsoleHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: #1e1e1e;
-  color: white;
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-`;
-
-const ConsoleOutput = styled.pre`
-  background: #1e1e1e;
-  color: #ffffff;
-  padding: 1rem;
-  border-radius: 4px;
+const Title = styled.h2`
   margin: 0;
-  overflow-x: auto;
-  font-family: 'Consolas', monospace;
-  min-height: 150px;
-  max-height: 300px;
-  overflow-y: auto;
+  font-size: 1.5em;
 `;
 
 const RunButton = styled.button`
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
   background: #4CAF50;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  font-size: 1rem;
+  color: #fff;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: background-color 0.2s;
+  font-size: 1.1em;
 
   &:hover {
-    background: #388E3C;
-  }
-
-  &:disabled {
-    background: #ccc;
-    cursor: not-allowed;
+    background: #45a049;
   }
 `;
 
-const NextDayButton = styled.button`
-  background: #2196F3;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  margin-top: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background: #1976D2;
-  }
+const Content = styled.div`
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  min-width: 0;
 `;
 
-const ResultMessage = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  margin-top: 1rem;
-  border-radius: 4px;
-  background: ${props => props.$isCorrect ? '#E8F5E9' : '#FFEBEE'};
-  color: ${props => props.$isCorrect ? '#2E7D32' : '#C62828'};
+const LessonContent = styled.div`
+  margin-bottom: 20px;
+  line-height: 1.6;
 `;
 
-const CheckIcon = styled.span`
-  font-weight: bold;
+const EditorContainer = styled.div`
+  margin: 20px 0;
+  border: 1px solid #333;
+  border-radius: 5px;
+  overflow: hidden;
 `;
 
-const LoadingSpinner = styled.div`
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #3498db;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  animation: spin 1s linear infinite;
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+const OutputContainer = styled.div`
+  margin-top: 20px;
+  padding: 15px;
+  background: #2d2d2d;
+  border-radius: 5px;
+  font-family: monospace;
+  white-space: pre-wrap;
 `;
 
-function LessonView() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [curriculum, setCurriculum] = useState(null);
-  const [currentDay, setCurrentDay] = useState(1);
+const LessonView = ({ day, onProgressUpdate }) => {
   const [currentLesson, setCurrentLesson] = useState(null);
-  const [editorContent, setEditorContent] = useState('');
-  const [consoleOutput, setConsoleOutput] = useState('');
-  const [isRunning, setIsRunning] = useState(false);
-  const [exerciseCompleted, setExerciseCompleted] = useState(false);
-  const [showHint, setShowHint] = useState(false);
+  const [code, setCode] = useState('');
+  const [output, setOutput] = useState('');
 
   useEffect(() => {
-    fetchCurriculum();
-  }, []);
-
-  useEffect(() => {
-    if (currentDay) {
-      fetchLesson(currentDay);
+    if (day) {
+      fetch(`http://localhost:5000/api/lesson/${day}`)
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then(data => {
+          setCurrentLesson(data);
+          setCode(data.exercise.starterCode || '');
+        })
+        .catch(err => console.error('Error fetching lesson:', err));
     }
-  }, [currentDay]);
+  }, [day]);
 
-  const fetchCurriculum = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/curriculum');
-      const data = await response.json();
-      setCurriculum(data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching curriculum:', error);
-      setError('Failed to load curriculum');
-      setLoading(false);
-    }
-  };
-
-  const fetchLesson = async (day) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch(`http://localhost:5000/api/lesson/${day}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      if (!data) {
-        throw new Error('No lesson data received');
-      }
-      
-      setCurrentLesson(data);
-      setEditorContent(data.exercise?.starterCode || '');
-      setShowHint(false);
-      setExerciseCompleted(false);
-      setConsoleOutput('');
-    } catch (error) {
-      console.error('Error fetching lesson:', error);
-      setError('Failed to load lesson. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDaySelect = (day) => {
-    if (day && day.day) {
-      setCurrentDay(day.day);
-    }
-  };
-
-  const handleNextDay = () => {
-    setCurrentDay(currentDay + 1);
-  };
-
-  const handleRunCode = async () => {
-    setIsRunning(true);
-    setConsoleOutput('');
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/exercise/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: editorContent,
-          day: currentDay
-        }),
+  const handleRunCode = () => {
+    setOutput('Running code...');
+    fetch('http://localhost:5000/api/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ code })
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data.error) {
+          setOutput(`Error: ${data.error}`);
+        } else {
+          setOutput(data.output || 'No output');
+          
+          // Check if the output matches the expected output
+          if (currentLesson?.exercise?.test_cases) {
+            const testCase = currentLesson.exercise.test_cases[0];
+            if (data.output.trim() === testCase.expected.trim()) {
+              // Update progress
+              fetch('http://localhost:5000/api/progress', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  completedDay: day
+                })
+              })
+                .then(res => {
+                  if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                  }
+                  return res.json();
+                })
+                .then(progressData => {
+                  if (onProgressUpdate) {
+                    onProgressUpdate(progressData);
+                  }
+                  setOutput(data.output + '\n\nCongratulations! You completed this lesson! 🎉');
+                })
+                .catch(err => {
+                  console.error('Error updating progress:', err);
+                  setOutput(data.output + '\n\nError updating progress. Please try again.');
+                });
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Error running code:', err);
+        setOutput(`Error: ${err.message}`);
       });
-
-      const data = await response.json();
-      setConsoleOutput(data.output);
-      
-      if (data.success) {
-        setExerciseCompleted(true);
-        fetchCurriculum();
-      }
-    } catch (error) {
-      setConsoleOutput(`Error running code: ${error.message}`);
-    } finally {
-      setIsRunning(false);
-    }
   };
 
-  if (loading) {
+  if (!currentLesson) {
     return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
   }
 
   return (
     <Container>
-      {curriculum && (
-        <BeltProgressTracker 
-          curriculum={curriculum.curriculum}
-          progress={curriculum.progress}
-          onDaySelect={handleDaySelect}
-        />
-      )}
-
-      {currentLesson && (
+      <TopBar>
+        <Title>Day {day}: {currentLesson.title}</Title>
+        <RunButton onClick={handleRunCode}>▶ Run</RunButton>
+      </TopBar>
+      <Content>
         <LessonContent>
-          <ContentPanel>
-            <ExercisePanel>
-              <h2>{currentLesson.title}</h2>
-              <div dangerouslySetInnerHTML={{ __html: currentLesson.content }} />
-              
-              {currentLesson.exercise && (
-                <>
-                  <h3>{currentLesson.exercise.title}</h3>
-                  <p>{currentLesson.exercise.description}</p>
-                  
-                  {!showHint && currentLesson.exercise.hint && (
-                    <button onClick={() => setShowHint(true)}>Show Hint</button>
-                  )}
-                  
-                  {showHint && currentLesson.exercise.hint && (
-                    <div>
-                      <strong>Hint:</strong> {currentLesson.exercise.hint}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {exerciseCompleted && (
-                <ResultMessage $isCorrect={true}>
-                  <CheckIcon>✓</CheckIcon> Great job! You've completed this exercise! 🎉
-                </ResultMessage>
-              )}
-
-              {exerciseCompleted && (
-                <NextDayButton onClick={handleNextDay}>
-                  Continue to Day {currentDay + 1} →
-                </NextDayButton>
-              )}
-            </ExercisePanel>
-            
-            <SenseiHelp 
-              lesson={currentLesson}
-              code={editorContent}
-            />
-          </ContentPanel>
-
-          <EditorPanel>
-            <EditorHeader>
-              <h3>Code Editor</h3>
-              <RunButton 
-                onClick={handleRunCode}
-                disabled={isRunning}
-              >
-                {isRunning ? (
-                  <>
-                    <LoadingSpinner /> Running...
-                  </>
-                ) : (
-                  'Run Code ▶'
-                )}
-              </RunButton>
-            </EditorHeader>
-            
-            <CodeEditor
-              code={editorContent}
-              onChange={setEditorContent}
-              height="300px"
-            />
-            
-            <div>
-              <ConsoleHeader>
-                <span>Console Output</span>
-              </ConsoleHeader>
-              <ConsoleOutput>
-                {consoleOutput || 'Output will appear here...'}
-              </ConsoleOutput>
-            </div>
-          </EditorPanel>
+          {currentLesson.content}
         </LessonContent>
-      )}
+        <h3>{currentLesson.exercise.title}</h3>
+        <p>{currentLesson.exercise.description}</p>
+        {currentLesson.exercise.hint && (
+          <p><strong>Hint:</strong> {currentLesson.exercise.hint}</p>
+        )}
+        <EditorContainer>
+          <AceEditor
+            mode="python"
+            theme="monokai"
+            value={code}
+            onChange={setCode}
+            name="code-editor"
+            width="100%"
+            height="300px"
+            fontSize={14}
+            showPrintMargin={false}
+            showGutter={true}
+            highlightActiveLine={true}
+            setOptions={{
+              enableBasicAutocompletion: true,
+              enableLiveAutocompletion: true,
+              enableSnippets: true,
+              showLineNumbers: true,
+              tabSize: 2,
+            }}
+          />
+        </EditorContainer>
+        <OutputContainer>
+          {output || 'Run your code to see the output here'}
+        </OutputContainer>
+      </Content>
     </Container>
   );
-}
+};
 
 export default LessonView;

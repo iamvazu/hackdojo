@@ -2,132 +2,25 @@
   "belts": [
     {
       "name": "white",
-      "displayName": "White Belt",
-      "color": "#f8f9fa",
+      "color": "#FFFFFF",
+      "startDay": 1,
+      "endDay": 10,
       "requiredDays": 10,
       "days": [
         {
           "day": 1,
-          "title": "Introduction to Print Statements",
-          "content": "Welcome to Python! Today we'll learn about different ways to print text.",
+          "title": "Introduction to Python",
+          "content": "Welcome to Python! Today we'll learn the basics of Python programming.",
           "exercise": {
-            "title": "Your First Programs",
-            "description": "Run these print statements to see different ways of outputting text in Python!",
-            "starterCode": "#Day1\nprint(\"Hello world!\")\n\nprint(\"\"\"HELLO\nWORLD\nWHATs\nUP\"\"\")\n\n#task1\nprint(\"\"\"İrem\n18 October 2023\nI am signing up for Replit's 100 days of Python challenge!\nI will make sure to spend some time every day coding along, for a minimum of 10 minutes a day.\nI'll be using Replit, an amazing online IDE so ı can do this from my phone whereever I happen to be. No excuses for not coding from middle of a field!\nI'm feeling🤨\nYou can follow my progress at replit.com/@IremBerber\"\"\")",
-            "hint": "Just click Run Code to see the output!",
+            "title": "Your First Program",
+            "description": "Write a program that prints 'Hello, Sensei!'",
+            "starterCode": "# Write your first Python program\nprint('Hello, Sensei!')",
+            "hint": "Use the print() function to output text",
             "test_cases": [
               {
                 "input": "",
-                "expected": "Hello world!\nHELLO\nWORLD\nWHATs\nUP\nİrem\n18 October 2023\nI am signing up for Replit's 100 days of Python challenge!\nI will make sure to spend some time every day coding along, for a minimum of 10 minutes a day.\nI'll be using Replit, an amazing online IDE so ı can do this from my phone whereever I happen to be. No excuses for not coding from middle of a field!\nI'm feeling🤨\nYou can follow my progress at replit.com/@IremBerber\n",
-                "description": "Running your first Python programs"
-              }
-            ]
-          }
-        },
-        {
-          "day": 2,
-          "title": "Input and Output",
-          "content": "Learn how to get input from users and display it back to them.",
-          "exercise": {
-            "title": "Personal Info and Song Generator",
-            "description": "Run these programs to collect user input and create personalized output!",
-            "starterCode": "#Day2\n\nMyName = input(\"Name: \")\nMyAge = input(\"Age: \")\nprint(\"Nice to meet you!\")\nprint()\nprint(\"So, you are\")\nprint(MyName)\nprint(\"and you are\")\nprint(MyAge)\nprint(\"years old.\")\n\n#task2\nprint(\"=== Your Song Generator ===\")\nprint(\"\"\"You'll be asked a bunch of questions\nthen we'll make you up an amazing\nsong, totally copyright free 😭\"\"\")\nprint()\nperson = input(\"Name a person famous for something good: \")\nthing = input(\"Name a thing they did: \")\nplace = input(\"Name a place you like: \")\nrhyme = input(\"Give me a verb that rhymes with your person's name: \")\nprint()\nprint(\"There was a person called\", person)\nprint(\"Who did something cool like\", thing, \"at the wonderful\", place, \"where you'll find me\", rhyme)",
-            "hint": "Run the code and answer the questions when prompted!",
-            "test_cases": [
-              {
-                "input": "John\n25\nEinstein\nTheory of Relativity\nPrinceton\njump",
-                "expected": "Nice to meet you!\n\nSo, you are\nJohn\nand you are\n25\nyears old.\n=== Your Song Generator ===\nYou'll be asked a bunch of questions\nthen we'll make you up an amazing\nsong, totally copyright free 😭\n\nThere was a person called Einstein\nWho did something cool like Theory of Relativity at the wonderful Princeton where you'll find me jump\n",
-                "description": "Testing input and output"
-              }
-            ]
-          }
-        },
-        {
-          "day": 3,
-          "title": "More Input Practice",
-          "content": "Practice getting input from users and creating stories.",
-          "exercise": {
-            "title": "Lunch Plans and Song Generator",
-            "description": "Run these programs to create personalized messages!",
-            "starterCode": "#Day3\n\nmyName = input(\"What's your name? \")\nmyLunch = input(\"What are you having for lunch? \")\nprint(myName, \"is going to be chowing down on\", myLunch, \"very soon!\")\n\n#task3\nprint(\"=== Your Song Generator ===\")\nprint(\"\"\"You'll be asked a bunch of questions\nthen we'll make you up an amazing\nsong, totally copyright free 😭\"\"\")\nprint()\nperson = input(\"Name a person famous for something good: \")\nthing = input(\"Name a thing they did: \")\nplace = input(\"Name a place you like: \")\nrhyme = input(\"Give me a verb that rhymes with your person's name: \")\nprint()\nprint(\"There was a person called\", person)\nprint(\"Who did something cool like\", thing, \"at the wonderful\", place, \"where you'll find me\", rhyme)",
-            "hint": "Run the code and answer the questions when prompted!",
-            "test_cases": [
-              {
-                "input": "Sarah\nPizza\nTesla\nElectric Cars\nCalifornia\ndrive",
-                "expected": "Sarah is going to be chowing down on Pizza very soon!\n=== Your Song Generator ===\nYou'll be asked a bunch of questions\nthen we'll make you up an amazing\nsong, totally copyright free 😭\n\nThere was a person called Tesla\nWho did something cool like Electric Cars at the wonderful California where you'll find me drive\n",
-                "description": "Testing input and output"
-              }
-            ]
-          }
-        },
-        {
-          "day": 4,
-          "title": "Adventure Simulator",
-          "content": "Create an interactive adventure story using input and print.",
-          "exercise": {
-            "title": "YOUR ADVENTURE SIMULATOR",
-            "description": "Run this program to create your own adventure story!",
-            "starterCode": "#Day4 Project Day\n\nprint(\"YOUR ADVENTURE SIMULATOR\")\n\nname = input(\"What is your name?:\")\nenemy = input(\"What is your enemy's name?:\")\npower = input(\"What is your super power?:\")\n\nprint()\n\nprint(\"It was a cold winter day.\", name, \"were walking down the street when\" , name,\" saw \", enemy ,\" standing in the middle of the road.\" , name , \"was know, the\" , enemy, \"is planing the attack. So\", name, \"use\" , name +\"'s secret power;\", power)",
-            "hint": "Run the code and enter your adventure details!",
-            "test_cases": [
-              {
-                "input": "Hero\nDragon\nFire Breath",
-                "expected": "YOUR ADVENTURE SIMULATOR\n\nIt was a cold winter day. Hero were walking down the street when Hero saw Dragon standing in the middle of the road. Hero was know, the Dragon is planing the attack. So Hero use Hero's secret power; Fire Breath\n",
-                "description": "Creating an adventure story"
-              }
-            ]
-          }
-        },
-        {
-          "day": 5,
-          "title": "If Statements",
-          "content": "Learn about making decisions in your code using if statements.",
-          "exercise": {
-            "title": "Character Quiz",
-            "description": "Run this program to find out which character you are!",
-            "starterCode": "#Day5\n\nmyName = input(\"What's your name?: \")\nif myName == \"İrem\":\n    print(\"Welcome Girl!\")\n    print(\"You are awesome!\")\nelse:\n    print(\"Who are you??\")\n\n#task\nprint(\"Which character are you?\")\n\nq1 = input(\"What is your favorite color? \")\nif q1 == \"red\":\n  print(\"You are Celestia.\")\nelif q1 == \"blue\":\n  print(\"You are Eve.\")\nelif q1 == \"green\":\n  print(\"You are Gilgamesh.\")\nelif q1 == \"yellow\":\n  print(\"You are Hermes.\")\nelif q1 == \"orange\":\n  print(\"You are Isis.\")\nelse:\n  print(\"Have no idea.\")",
-            "hint": "Run the code and answer the questions to find your character!",
-            "test_cases": [
-              {
-                "input": "John\nred",
-                "expected": "Who are you??\nWhich character are you?\nYou are Celestia.\n",
-                "description": "Testing if statements"
-              }
-            ]
-          }
-        },
-        {
-          "day": 6,
-          "title": "Numbers and Math",
-          "content": "Learn about numbers and basic mathematical operations in Python.",
-          "exercise": {
-            "title": "Basic Calculator",
-            "description": "Create a simple calculator that adds two numbers.",
-            "starterCode": "#Day6\n\n# Create a calculator\n# Add the numbers 5 and 3\n\n",
-            "hint": "Use the + operator",
-            "required_terms": ["+"],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": "8"
-              }
-            ]
-          }
-        },
-        {
-          "day": 7,
-          "title": "Strings",
-          "content": "Working with text in Python.",
-          "exercise": {
-            "title": "String Operations",
-            "description": "Combine two strings using concatenation.",
-            "starterCode": "#Day7\n\n# Combine 'Hello' and 'World'\n\n",
-            "hint": "Use the + operator with strings",
-            "required_terms": ["+"],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": "HelloWorld"
+                "expected": "Hello, Sensei!",
+                "description": "Basic output test"
               }
             ]
           }
@@ -136,205 +29,67 @@
     },
     {
       "name": "yellow",
-      "displayName": "Yellow Belt",
-      "color": "#fff3bf",
-      "requiredDays": 20,
-      "days": [
-        {
-          "day": 11,
-          "title": "Variables and Data Types",
-          "content": "Learn about variables and basic data types in Python.",
-          "exercise": {
-            "title": "Variable Assignment",
-            "description": "Create variables of different types.",
-            "starterCode": "#Day11\n\n# Create variables\n\n",
-            "hint": "Use = to assign values",
-            "required_terms": ["="],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": ""
-              }
-            ]
-          }
-        },
-        {
-          "day": 12,
-          "title": "Type Conversion",
-          "content": "Converting between different data types.",
-          "exercise": {
-            "title": "Type Casting",
-            "description": "Convert a string to a number.",
-            "starterCode": "#Day12\n\n# Convert '42' to an integer\n\n",
-            "hint": "Use the int() function",
-            "required_terms": ["int"],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": "42"
-              }
-            ]
-          }
-        },
-        {
-          "day": 13,
-          "title": "User Input",
-          "content": "Getting input from users.",
-          "exercise": {
-            "title": "Input Processing",
-            "description": "Get a name from the user and greet them.",
-            "starterCode": "#Day13\n\n# Get user's name and say hello\n\n",
-            "hint": "Use input() function",
-            "required_terms": ["input"],
-            "test_cases": [
-              {
-                "input": "Alice",
-                "expected": "Hello, Alice"
-              }
-            ]
-          }
-        }
-      ]
+      "color": "#FFD700",
+      "startDay": 11,
+      "endDay": 20,
+      "requiredDays": 10,
+      "days": []
     },
     {
       "name": "orange",
-      "displayName": "Orange Belt",
-      "color": "#ffe8cc",
-      "requiredDays": 30,
-      "days": [
-        {
-          "day": 21,
-          "title": "If Statements",
-          "content": "Learn about conditional statements.",
-          "exercise": {
-            "title": "Basic Conditionals",
-            "description": "Check if a number is positive.",
-            "starterCode": "#Day21\n\n# Check if number is positive\n\n",
-            "hint": "Use if statement",
-            "required_terms": ["if"],
-            "test_cases": [
-              {
-                "input": "5",
-                "expected": "Positive"
-              }
-            ]
-          }
-        },
-        {
-          "day": 22,
-          "title": "For Loops",
-          "content": "Introduction to loops.",
-          "exercise": {
-            "title": "Basic Loops",
-            "description": "Print numbers from 1 to 5.",
-            "starterCode": "#Day22\n\n# Print numbers 1 to 5\n\n",
-            "hint": "Use for and range()",
-            "required_terms": ["for", "range"],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": "1\n2\n3\n4\n5"
-              }
-            ]
-          }
-        },
-        {
-          "day": 23,
-          "title": "While Loops",
-          "content": "Another way to create loops.",
-          "exercise": {
-            "title": "While Loop Practice",
-            "description": "Count down from 5 to 1.",
-            "starterCode": "#Day23\n\n# Countdown from 5\n\n",
-            "hint": "Use while loop",
-            "required_terms": ["while"],
-            "test_cases": [
-              {
-                "input": "",
-                "expected": "5\n4\n3\n2\n1"
-              }
-            ]
-          }
-        }
-      ]
+      "color": "#FFA500",
+      "startDay": 21,
+      "endDay": 30,
+      "requiredDays": 10,
+      "days": []
     },
     {
       "name": "green",
-      "displayName": "Green Belt",
-      "color": "#d3f9d8",
-      "requiredDays": 40,
-      "days": [
-        {
-          "day": 31,
-          "title": "Functions",
-          "content": "Learn to write reusable code with functions."
-        }
-      ]
+      "color": "#008000",
+      "startDay": 31,
+      "endDay": 40,
+      "requiredDays": 10,
+      "days": []
     },
     {
       "name": "blue",
-      "displayName": "Blue Belt",
-      "color": "#d0ebff",
-      "requiredDays": 50,
-      "days": [
-        {
-          "day": 41,
-          "title": "Lists and Dictionaries",
-          "content": "Work with complex data structures."
-        }
-      ]
+      "color": "#0000FF",
+      "startDay": 41,
+      "endDay": 50,
+      "requiredDays": 10,
+      "days": []
     },
     {
       "name": "purple",
-      "displayName": "Purple Belt",
-      "color": "#e5dbff",
-      "requiredDays": 60,
-      "days": [
-        {
-          "day": 51,
-          "title": "Object-Oriented Programming",
-          "content": "Learn about classes and objects."
-        }
-      ]
-    },
-    {
-      "name": "brown",
-      "displayName": "Brown Belt",
-      "color": "#e8d3c7",
-      "requiredDays": 70,
-      "days": [
-        {
-          "day": 61,
-          "title": "File Handling",
-          "content": "Work with files and data persistence."
-        }
-      ]
+      "color": "#800080",
+      "startDay": 51,
+      "endDay": 60,
+      "requiredDays": 10,
+      "days": []
     },
     {
       "name": "red",
-      "displayName": "Red Belt",
-      "color": "#ffe3e3",
-      "requiredDays": 80,
-      "days": [
-        {
-          "day": 71,
-          "title": "Error Handling",
-          "content": "Master exceptions and error handling."
-        }
-      ]
+      "color": "#FF0000",
+      "startDay": 61,
+      "endDay": 70,
+      "requiredDays": 10,
+      "days": []
+    },
+    {
+      "name": "brown",
+      "color": "#8B4513",
+      "startDay": 71,
+      "endDay": 90,
+      "requiredDays": 20,
+      "days": []
     },
     {
       "name": "black",
-      "displayName": "Black Belt",
-      "color": "#343a40",
-      "requiredDays": 90,
-      "days": [
-        {
-          "day": 81,
-          "title": "Advanced Topics",
-          "content": "Tackle advanced Python concepts."
-        }
-      ]
+      "color": "#000000",
+      "startDay": 91,
+      "endDay": 100,
+      "requiredDays": 10,
+      "days": []
     }
   ]
 }

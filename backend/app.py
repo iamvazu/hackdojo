@@ -1,23 +1,32 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import os
 import json
-import sqlite3
 import subprocess
+import os
 import tempfile
+import sqlite3
 from datetime import datetime
+import codecs
 
 app = Flask(__name__)
+CORS(app)
 
 # Configure CORS for development
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+# CORS(app)  
+
+@app.before_request
+def before_request():
+    if request.method == 'OPTIONS':
+        response = jsonify()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        return response
+
+@app.after_request
+def after_request(response):
+    response.headers['Content-Type'] = 'application/json'
+    return response
 
 def get_db():
     db = sqlite3.connect('hackdojo.db')
@@ -31,9 +40,27 @@ def init_db():
 # Load curriculum data
 def load_curriculum():
     try:
-        with open(os.path.join(os.path.dirname(__file__), 'curriculum.json'), 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
+        curriculum_path = os.path.join(os.path.dirname(__file__), 'curriculum.json')
+        print(f"Loading curriculum from: {curriculum_path}")
+        
+        if not os.path.exists(curriculum_path):
+            print("Error: curriculum.json not found")
+            return {"belts": []}
+            
+        with codecs.open(curriculum_path, 'r', encoding='utf-8-sig') as f:
+            curriculum = json.load(f)
+            
+        if not curriculum or not isinstance(curriculum, dict) or 'belts' not in curriculum:
+            print("Error: Invalid curriculum format")
+            return {"belts": []}
+            
+        print(f"Successfully loaded curriculum with {len(curriculum['belts'])} belts")
+        return curriculum
+    except json.JSONDecodeError as e:
+        print(f"Error decoding curriculum.json: {str(e)}")
+        return {"belts": []}
+    except Exception as e:
+        print(f"Unexpected error loading curriculum: {str(e)}")
         return {"belts": []}
 
 def get_user_progress(user_id=1):  # Default user_id for now
@@ -121,253 +148,223 @@ def update_user_progress(user_id, day, success):
     
     db.commit()
 
-# Curriculum and progress endpoints
+def load_progress():
+    try:
+        with open('progress.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading progress: {e}")
+        return {
+            "currentBelt": "white",
+            "currentDay": 1,
+            "completedDays": [],
+            "lastUpdated": ""
+        }
+
+def save_progress(progress_data):
+    try:
+        progress_data['lastUpdated'] = datetime.now().isoformat()
+        with open('progress.json', 'w', encoding='utf-8') as f:
+            json.dump(progress_data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving progress: {e}")
+        return False
+
 @app.route('/api/curriculum', methods=['GET'])
 def get_curriculum():
-    """Get the full curriculum structure with user progress"""
     try:
         curriculum = load_curriculum()
-        if not curriculum or 'belts' not in curriculum:
-            return jsonify({'belts': []})
-            
-        user_progress = get_user_progress()
-        current_day = user_progress.get('current_day', 1)
-        completed_days = user_progress.get('completed_days', [])
-        
-        # Transform curriculum data to include progress
-        for belt in curriculum['belts']:
-            if 'days' not in belt:
-                belt['days'] = []
-                
-            for day in belt['days']:
-                day['isCompleted'] = day['day'] in completed_days
-                day['isLocked'] = day['day'] > current_day
-        
         return jsonify(curriculum)
     except Exception as e:
-        print(f"Error in get_curriculum: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/lesson/<int:day>', methods=['GET'])
 def get_lesson(day):
-    """Get lesson content for a specific day"""
     try:
         curriculum = load_curriculum()
-        if not curriculum or 'belts' not in curriculum:
-            return jsonify({'error': 'Invalid curriculum data'}), 500
-            
-        # Find the lesson for the given day
+        if not curriculum:
+            return jsonify({'error': 'Failed to load curriculum'}), 500
+
+        # Find the belt and lesson for the given day
         for belt in curriculum['belts']:
-            if 'days' not in belt:
-                continue
+            start_day = belt.get('startDay', 1)
+            end_day = belt.get('endDay', belt['requiredDays'])
+            
+            if start_day <= day <= end_day:
+                # Check if this day exists in the belt's days
+                for lesson in belt.get('days', []):
+                    if lesson['day'] == day:
+                        return jsonify(lesson)
                 
-            for lesson in belt['days']:
-                if lesson.get('day') == day:
-                    # Add belt context to the lesson
-                    lesson_data = {
-                        **lesson,
-                        'belt': {
-                            'name': belt['name'],
-                            'displayName': belt.get('displayName', belt['name']),
-                            'color': belt.get('color', '#f8f9fa')
-                        }
+                # If day not found in belt's days, return a default lesson
+                return jsonify({
+                    'day': day,
+                    'title': f'Day {day}',
+                    'content': 'Lesson content coming soon!',
+                    'exercise': {
+                        'title': 'Practice Exercise',
+                        'description': 'Try writing some Python code!',
+                        'starterCode': '# Write your Python code here\nprint("Hello, World!")',
+                        'hint': 'Start by using the print() function',
+                        'test_cases': [
+                            {
+                                'input': '',
+                                'expected': 'Hello, World!',
+                                'description': 'Basic output test'
+                            }
+                        ]
                     }
-                    return jsonify(lesson_data)
-        
+                })
+
         return jsonify({'error': f'No lesson found for day {day}'}), 404
-        
+
     except Exception as e:
-        print(f"Error in get_lesson: {str(e)}")
-        return jsonify({'error': 'Failed to load lesson'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/exercise/validate', methods=['POST'])
-def validate_exercise():
-    """Validate user's exercise solution"""
-    try:
-        data = request.get_json()
-        code = data.get('code', '')
-        day = data.get('day')
-        
-        if not code or not day:
-            return jsonify({
-                'success': False,
-                'message': 'Missing code or day parameter',
-                'output': 'Please provide both code and day parameters.'
-            }), 400
+@app.route('/api/progress', methods=['GET', 'POST'])
+def handle_progress():
+    if request.method == 'GET':
+        progress = load_progress()
+        return jsonify(progress)
+    else:  # POST
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
 
-        # Load curriculum to get test cases
-        curriculum = load_curriculum()
-        
-        # Find the exercise for the given day
-        exercise = None
-        for belt in curriculum['belts']:
-            for lesson_day in belt['days']:
-                if lesson_day['day'] == day and 'exercise' in lesson_day:
-                    exercise = lesson_day['exercise']
-                    break
-            if exercise:
-                break
-        
-        if not exercise:
-            return jsonify({
-                'success': False,
-                'message': f'No exercise found for day {day}',
-                'output': 'Could not find the exercise for this day.'
-            }), 404
-
-        # Validate the code
-        validation_result = validate_code(code, exercise)
-        
-        # Update user progress if successful
-        if validation_result['success']:
-            update_user_progress(1, day, True)  # Using default user_id 1 for now
+            current_progress = load_progress()
             
-        return jsonify({
-            'success': validation_result['success'],
-            'message': validation_result['message'],
-            'output': validation_result['output']
-        })
+            # Update completed days
+            if 'completedDay' in data:
+                completed_day = data['completedDay']
+                if completed_day not in current_progress['completedDays']:
+                    current_progress['completedDays'].append(completed_day)
+                    current_progress['completedDays'].sort()
+                
+                # Update current day if necessary
+                if completed_day >= current_progress['currentDay']:
+                    current_progress['currentDay'] = completed_day + 1
 
+                # Update belt if necessary
+                curriculum = load_curriculum()
+                if curriculum:
+                    for belt in curriculum['belts']:
+                        if belt['startDay'] <= current_progress['currentDay'] <= belt['endDay']:
+                            current_progress['currentBelt'] = belt['name']
+                            break
+
+            if save_progress(current_progress):
+                return jsonify(current_progress)
+            else:
+                return jsonify({'error': 'Failed to save progress'}), 500
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/api/run', methods=['POST'])
+def run_code():
+    try:
+        code = request.json.get('code', '')
+        
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(code)
+            temp_path = f.name
+        
+        try:
+            # Run the code and capture output
+            result = subprocess.run(
+                ['python', temp_path],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            output = result.stdout if result.returncode == 0 else result.stderr
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+        
+        return jsonify({'output': output})
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Code execution timed out'}), 408
     except Exception as e:
-        print(f"Error in validate_exercise: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': str(e),
-            'output': f'An error occurred: {str(e)}'
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/sensei-help', methods=['POST', 'OPTIONS'])
-def get_sensei_help():
-    if request.method == 'OPTIONS':
-        return '', 200
+@app.route('/api/validate', methods=['POST'])
+def validate_code():
+    data = request.get_json()
+    code = data.get('code', '')
+    day = data.get('day')
+    test_cases = data.get('test_cases', [])
+    
+    if not code or not day or not test_cases:
+        return jsonify({'error': 'Missing required fields'}), 400
         
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'No data provided'}), 400
-            
-        code = data.get('code', '')
-        context = data.get('context', '')
-        question = data.get('question', '')
-        current_day = data.get('currentDay', 1)
-        current_belt = data.get('currentBelt', 'white')
-
-        # Provide a helpful default response without using OpenAI
-        response = (
-            f"I'm here to help you with Day {current_day} of your {current_belt.capitalize()} Belt journey!\n\n"
-            "Here are some general tips:\n"
-            "1. Break down the problem into smaller steps\n"
-            "2. Test your code frequently\n"
-            "3. Use console.log() or print() to debug\n"
-            "4. Check your syntax and indentation\n\n"
-            "Feel free to ask specific questions about:\n"
-            "- Code structure\n"
-            "- Error messages\n"
-            "- Best practices\n"
-            "- Debugging techniques"
-        )
-        
-        return jsonify({
-            'success': True,
-            'response': response
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error in sensei-help: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
-
-@app.route('/api/execute', methods=['POST', 'OPTIONS'])
-def execute_code():
-    if request.method == 'OPTIONS':
-        return '', 200
-        
-    try:
-        data = request.get_json()
-        if not data or 'code' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'No code provided'
-            }), 400
-
-        code = data['code']
-        
-        # Create a temporary file to store the code
+        # Create a temporary file for the code
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
             f.write(code)
             temp_file = f.name
             
-        try:
-            # Run the code with a timeout
-            result = subprocess.run(
+        success = True
+        message = ''
+            
+        # Run test cases
+        for test_case in test_cases:
+            # Execute the code with test input
+            input_data = test_case.get('input', '')
+            expected_output = test_case.get('expected', '').strip()
+            
+            # Run the code and capture output
+            process = subprocess.run(
                 ['python', temp_file],
+                input=input_data,
                 capture_output=True,
                 text=True,
-                timeout=5  # 5 second timeout
+                timeout=5
             )
             
-            return jsonify({
-                'success': True,
-                'output': result.stdout,
-                'error': result.stderr
-            })
+            actual_output = process.stdout.strip()
             
-        except subprocess.TimeoutExpired:
-            return jsonify({
-                'success': False,
-                'error': 'Code execution timed out'
-            }), 408
-            
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-            
-        finally:
-            # Clean up the temporary file
-            os.unlink(temp_file)
-            
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-def validate_code(code, exercise):
-    try:
-        # Create temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-            temp_file.write(code)
-            temp_file_path = temp_file.name
-        
-        # Run code
-        process = subprocess.run(
-            ['python', temp_file_path],
-            capture_output=True,
-            text=True
-        )
+            # Compare outputs
+            if actual_output != expected_output:
+                success = False
+                message = f'Test case failed. Expected: {expected_output}, Got: {actual_output}'
+                break
         
         # Clean up
-        os.unlink(temp_file_path)
+        os.unlink(temp_file)
         
-        # Just check if the output contains the exact string we want
-        success = "Hello, Python!" in process.stdout
+        # Update user progress if successful
+        if success:
+            user_id = 1  # Replace with actual user authentication
+            update_user_progress(user_id, day, True)
         
-        return {
+        return jsonify({
             'success': success,
-            'message': 'Great job!' if success else 'Try again!',
-            'output': process.stdout
-        }
+            'message': message or 'All test cases passed!'
+        })
         
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Code execution timed out'}), 408
     except Exception as e:
-        return {
-            'success': False,
-            'message': str(e),
-            'output': str(e)
-        }
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    data = request.json
+    message = data.get('message')
+    current_belt = data.get('currentBelt')
+    current_day = data.get('currentDay')
+    
+    # Here you would integrate with your AI model for chat responses
+    # For now, we'll return a simple response
+    response = {
+        'response': f"I see you're working on your {current_belt} belt, day {current_day}. How can I help you with your Python journey?"
+    }
+    
+    return jsonify(response)
 
 if __name__ == '__main__':
     init_db()
