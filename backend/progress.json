@@ -1,6 +1,6 @@
 {
-  "currentBelt": "yellow",
-  "currentDay": 17,
+  "currentBelt": "orange",
+  "currentDay": 21,
   "completedDays": [
     1,
     2,
@@ -17,7 +17,11 @@
     13,
     14,
     15,
-    16
+    16,
+    17,
+    18,
+    19,
+    20
   ],
-  "lastUpdated": "2024-12-03T18:22:03.149942"
+  "lastUpdated": "2024-12-03T18:38:47.044203"
 }
