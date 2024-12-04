@@ -1,0 +1,8 @@
+frontend/
+node_modules/
+.git/
+.vercel/
+api/
+*.log
+.env
+.env.local
