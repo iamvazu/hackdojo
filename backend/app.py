@@ -9,7 +9,19 @@ from datetime import datetime
 import codecs
 
 app = Flask(__name__)
-CORS(app)
+
+# CORS configuration
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:3000",
+            "https://frontend-7h9tmjvt8-hackdojos-projects.vercel.app",
+            "https://hackdojo-ui-ux-enhancements.vercel.app"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Configure CORS for development
 # CORS(app)  
