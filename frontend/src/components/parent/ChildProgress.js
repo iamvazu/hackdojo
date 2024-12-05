@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { useAuth } from '../auth/AuthContext';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -38,6 +39,15 @@ const ChildInfo = styled.div`
 
 const ChildName = styled.h1`
   color: #333;
+  margin-bottom: 1rem;
+`;
+
+const BeltLevel = styled.div`
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: ${props => props.$color || '#f5f5f5'};
+  color: ${props => props.$textColor || '#333'};
+  border-radius: 5px;
   margin-bottom: 1rem;
 `;
 
@@ -117,72 +127,35 @@ const StatusBadge = styled.span`
   color: ${props => props.$completed ? 'white' : '#666'};
 `;
 
-const AchievementsSection = styled.div`
-  background: white;
-  border-radius: 10px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-
-const AchievementGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1.5rem;
-`;
-
-const AchievementCard = styled.div`
-  background: #f5f5f5;
-  padding: 1.5rem;
-  border-radius: 8px;
-  text-align: center;
-  
-  .icon {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-  
-  .title {
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 0.5rem;
-  }
-  
-  .description {
-    color: #666;
-    font-size: 0.9rem;
-  }
-  
-  .date {
-    color: #999;
-    font-size: 0.8rem;
-    margin-top: 1rem;
-  }
-`;
+const getBeltColor = (belt) => {
+  const colors = {
+    white: { bg: '#f5f5f5', text: '#333' },
+    yellow: { bg: '#fff59d', text: '#333' },
+    orange: { bg: '#ffb74d', text: '#333' },
+    green: { bg: '#81c784', text: '#fff' },
+    blue: { bg: '#64b5f6', text: '#fff' },
+    purple: { bg: '#9575cd', text: '#fff' },
+    red: { bg: '#e57373', text: '#fff' },
+    brown: { bg: '#8d6e63', text: '#fff' },
+    black: { bg: '#424242', text: '#fff' }
+  };
+  return colors[belt.toLowerCase()] || colors.white;
+};
 
 function ChildProgress() {
   const { childId } = useParams();
+  const { isParent, fetchChildProgress } = useAuth();
   const [childData, setChildData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchChildData();
+    loadChildData();
   }, [childId]);
 
-  const fetchChildData = async () => {
+  const loadChildData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/auth/child/${childId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch child data');
-      }
-
-      const data = await response.json();
+      const data = await fetchChildProgress(childId);
       setChildData(data);
     } catch (err) {
       setError(err.message);
@@ -190,6 +163,10 @@ function ChildProgress() {
       setLoading(false);
     }
   };
+
+  if (!isParent) {
+    return <Navigate to="/login" />;
+  }
 
   if (loading) {
     return <Container>Loading...</Container>;
@@ -203,8 +180,7 @@ function ChildProgress() {
     return <Container>No data found for this child</Container>;
   }
 
-  const completedLessons = childData.progress?.filter(p => p.completed)?.length || 0;
-  const totalLessons = 20; // Update based on your curriculum
+  const beltColors = getBeltColor(childData.belt_level);
 
   return (
     <Container>
@@ -214,59 +190,44 @@ function ChildProgress() {
 
       <ChildInfo>
         <ChildName>{childData.name}'s Progress</ChildName>
-        <div>Age: {childData.age}</div>
-        <div>School: {childData.school}</div>
+        <BeltLevel $color={beltColors.bg} $textColor={beltColors.text}>
+          {childData.belt_level} Belt
+        </BeltLevel>
         
         <Stats>
           <StatCard>
-            <div className="number">{completedLessons}</div>
+            <div className="number">{childData.completed_lessons || 0}</div>
             <div className="label">Lessons Completed</div>
           </StatCard>
           <StatCard>
-            <div className="number">{childData.points || 0}</div>
-            <div className="label">Points Earned</div>
+            <div className="number">{childData.badges?.length || 0}</div>
+            <div className="label">Badges Earned</div>
           </StatCard>
           <StatCard>
-            <div className="number">{Math.round((completedLessons / totalLessons) * 100)}%</div>
+            <div className="number">{Math.round(childData.progress_percentage || 0)}%</div>
             <div className="label">Overall Progress</div>
           </StatCard>
         </Stats>
       </ChildInfo>
 
       <ProgressSection>
-        <SectionTitle>Recent Lessons</SectionTitle>
+        <SectionTitle>Recent Progress</SectionTitle>
         <LessonList>
-          {childData.progress?.map(lesson => (
-            <LessonCard key={lesson.id} $completed={lesson.completed}>
+          {childData.progress?.map(progress => (
+            <LessonCard key={progress.lesson_id} $completed={progress.completed}>
               <div className="lesson-info">
-                <h3>{lesson.title}</h3>
+                <h3>Lesson {progress.lesson_id}</h3>
                 <div className="date">
-                  {new Date(lesson.lastAttempt).toLocaleDateString()}
+                  {progress.completed_at ? new Date(progress.completed_at).toLocaleDateString() : 'Not completed'}
                 </div>
               </div>
-              <StatusBadge $completed={lesson.completed}>
-                {lesson.completed ? 'Completed' : 'In Progress'}
+              <StatusBadge $completed={progress.completed}>
+                {progress.completed ? `Score: ${progress.score}%` : 'In Progress'}
               </StatusBadge>
             </LessonCard>
           ))}
         </LessonList>
       </ProgressSection>
-
-      <AchievementsSection>
-        <SectionTitle>Achievements</SectionTitle>
-        <AchievementGrid>
-          {childData.achievements?.map(achievement => (
-            <AchievementCard key={achievement.id}>
-              <div className="icon">🏆</div>
-              <div className="title">{achievement.title}</div>
-              <div className="description">{achievement.description}</div>
-              <div className="date">
-                Earned on {new Date(achievement.earnedDate).toLocaleDateString()}
-              </div>
-            </AchievementCard>
-          ))}
-        </AchievementGrid>
-      </AchievementsSection>
     </Container>
   );
 }

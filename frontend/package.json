@@ -5,12 +5,16 @@
   "dependencies": {
     "@monaco-editor/loader": "^1.4.0",
     "@monaco-editor/react": "^4.6.0",
+    "@tailwindcss/forms": "^0.5.9",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "ace-builds": "^1.36.5",
+    "autoprefixer": "^10.4.20",
     "axios": "^1.6.7",
+    "firebase": "^10.14.1",
     "framer-motion": "^11.0.3",
+    "postcss": "^8.4.49",
     "react": "^18.2.0",
     "react-ace": "^13.0.0",
     "react-dom": "^18.2.0",
@@ -21,6 +25,7 @@
     "react-scripts": "5.0.1",
     "react-syntax-highlighter": "^15.6.1",
     "styled-components": "^6.1.13",
+    "tailwindcss": "^3.4.16",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

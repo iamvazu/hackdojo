@@ -1,26 +1,199 @@
 {
   "belts": [
     {
-      "name": "white",
+      "name": "White Belt",
       "color": "#FFFFFF",
       "startDay": 1,
       "endDay": 10,
       "requiredDays": 10,
+      "description": "Python Basics - Variables, Data Types, and Basic Operations",
       "days": [
         {
           "day": 1,
-          "title": "Introduction to Python",
-          "content": "Welcome to Python! Today we'll learn the basics of Python programming.",
+          "title": "Getting Started with Python",
+          "content": "Welcome to Python! Today we'll learn the basics of Python programming, including variables, data types, and basic operations.\n\nPython is a high-level, interpreted programming language known for its simplicity and readability. Let's start with the basics:\n\n1. Print Function:\nThe print() function is used to output text to the console.\nExample: print('Hello, World!')\n\n2. Comments:\nComments help explain your code and are ignored by Python.\nUse # for single-line comments\nUse ''' or \"\"\" for multi-line comments\n\n3. Basic Syntax:\n- Python uses indentation to define code blocks\n- Statements don't need semicolons\n- Case sensitive (name ≠ Name)",
           "exercise": {
             "title": "Your First Program",
-            "description": "Write a program that prints 'Hello, Sensei!'",
-            "starterCode": "# Write your first Python program\nprint('Hello, Sensei!')",
-            "hint": "Use the print() function to output text",
+            "description": "Write a program that prints 'Hello, Sensei!' and then prints your name on a new line.",
+            "starterCode": "# Write your first Python program\n# 1. Print 'Hello, Sensei!'\n# 2. Print your name\n\n",
+            "hint": "Use the print() function for each line",
             "test_cases": [
               {
                 "input": "",
-                "expected": "Hello, Sensei!",
+                "expected": "Hello, Sensei!\n",
                 "description": "Basic output test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 2,
+          "title": "Variables and Data Types",
+          "content": "In Python, variables are used to store data. Python has several basic data types:\n\n1. Strings (str):\n   - Text data enclosed in quotes\n   - Example: name = 'John'\n\n2. Integers (int):\n   - Whole numbers\n   - Example: age = 25\n\n3. Floating-point numbers (float):\n   - Decimal numbers\n   - Example: height = 5.9\n\n4. Booleans (bool):\n   - True or False values\n   - Example: is_student = True\n\nType Conversion:\n- str(): Convert to string\n- int(): Convert to integer\n- float(): Convert to float\n- bool(): Convert to boolean",
+          "exercise": {
+            "title": "Variable Practice",
+            "description": "Create variables for your name (string), age (integer), and height (float). Print them in a formatted way.",
+            "starterCode": "# Create your variables here\n# name = 'Your Name'\n# age = Your Age\n# height = Your Height\n\n# Print your variables\n",
+            "hint": "Remember to use appropriate data types for each variable",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "",
+                "description": "Variable declaration test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 3,
+          "title": "Basic Operations",
+          "content": "Python supports various mathematical and string operations:\n\nMathematical Operations:\n1. Addition: +\n2. Subtraction: -\n3. Multiplication: *\n4. Division: /\n5. Integer Division: //\n6. Modulus (remainder): %\n7. Exponentiation: **\n\nString Operations:\n1. Concatenation: +\n2. Repetition: *\n3. Indexing: string[index]\n4. Slicing: string[start:end]\n\nExample:\nx = 10\ny = 3\nprint(x + y)  # 13\nprint(x * y)  # 30\n\nname = 'Python'\nprint(name + ' Programming')  # Python Programming\nprint(name * 2)  # PythonPython",
+          "exercise": {
+            "title": "Calculator",
+            "description": "Write a program that performs basic arithmetic operations on two numbers.",
+            "starterCode": "# Create two variables: num1 = 10, num2 = 5\n\n# Print their sum, difference, product, and quotient\n",
+            "hint": "Use the basic arithmetic operators (+, -, *, /)",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "15\n5\n50\n2.0\n",
+                "description": "Basic arithmetic test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 4,
+          "title": "String Methods",
+          "content": "Python strings come with many useful built-in methods:\n\n1. len(): Get string length\n   length = len('Python')  # 6\n\n2. upper(): Convert to uppercase\n   'python'.upper()  # 'PYTHON'\n\n3. lower(): Convert to lowercase\n   'PYTHON'.lower()  # 'python'\n\n4. strip(): Remove whitespace\n   ' python '.strip()  # 'python'\n\n5. replace(): Replace text\n   'Hello'.replace('H', 'h')  # 'hello'\n\n6. split(): Split string into list\n   'a,b,c'.split(',')  # ['a', 'b', 'c']",
+          "exercise": {
+            "title": "String Manipulation",
+            "description": "Create a program that manipulates a given string using various string methods.",
+            "starterCode": "text = '  Python Programming  '\n\n# 1. Remove leading/trailing spaces\n# 2. Convert to uppercase\n# 3. Print the length\n",
+            "hint": "Use strip(), upper(), and len()",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "PYTHON PROGRAMMING\n17\n",
+                "description": "String methods test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 5,
+          "title": "Input and Type Conversion",
+          "content": "Python's input() function allows us to get user input:\n\n1. Basic Input:\n   name = input('Enter your name: ')\n\n2. Type Conversion:\n   - All input is received as strings\n   - Convert to numbers using int() or float()\n   \nExample:\nage_str = input('Enter age: ')\nage = int(age_str)\n\nheight_str = input('Enter height: ')\nheight = float(height_str)\n\nCommon Conversions:\n- str(): Convert to string\n- int(): Convert to integer\n- float(): Convert to float\n- bool(): Convert to boolean",
+          "exercise": {
+            "title": "Age Calculator",
+            "description": "Write a program that asks for birth year and calculates age.",
+            "starterCode": "# Get birth year from user and calculate age\n# Current year is 2024\n\n",
+            "hint": "Remember to convert input string to integer",
+            "test_cases": [
+              {
+                "input": "2000",
+                "expected": "You are 24 years old.\n",
+                "description": "Age calculation test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 6,
+          "title": "Boolean Operations",
+          "content": "Boolean operations are fundamental for making decisions in programming:\n\n1. Comparison Operators:\n   - Equal to: ==\n   - Not equal to: !=\n   - Greater than: >\n   - Less than: <\n   - Greater than or equal to: >=\n   - Less than or equal to: <=\n\n2. Logical Operators:\n   - and: Both conditions must be True\n   - or: At least one condition must be True\n   - not: Inverts the boolean value\n\nExamples:\nx = 5\ny = 10\nprint(x < y)  # True\nprint(x == y)  # False\nprint(not x < y)  # False",
+          "exercise": {
+            "title": "Number Comparison",
+            "description": "Write a program that compares two numbers and prints whether they are equal, and if not, which one is larger.",
+            "starterCode": "num1 = 15\nnum2 = 20\n\n# Compare the numbers and print the result\n",
+            "hint": "Use if statements with comparison operators",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "20 is larger than 15\n",
+                "description": "Number comparison test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 7,
+          "title": "Basic Math Functions",
+          "content": "Python's math module provides advanced mathematical functions:\n\n1. Import math module:\n   import math\n\n2. Common Math Functions:\n   - math.sqrt(): Square root\n   - math.pow(): Power\n   - math.floor(): Round down\n   - math.ceil(): Round up\n   - math.pi: Pi constant\n   - math.abs(): Absolute value\n\n3. Built-in Functions:\n   - abs(): Absolute value\n   - round(): Round number\n   - max(): Maximum value\n   - min(): Minimum value\n\nExample:\nimport math\nx = -4.7\nprint(abs(x))  # 4.7\nprint(round(x))  # -5\nprint(math.sqrt(16))  # 4.0",
+          "exercise": {
+            "title": "Math Calculator",
+            "description": "Create a program that calculates the square root, ceiling, and floor of a number.",
+            "starterCode": "import math\n\nnum = 12.7\n\n# Calculate and print:\n# 1. Square root\n# 2. Ceiling\n# 3. Floor\n",
+            "hint": "Use math.sqrt(), math.ceil(), and math.floor()",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "3.5637\n13\n12\n",
+                "description": "Math functions test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 8,
+          "title": "String Formatting",
+          "content": "Python offers several ways to format strings:\n\n1. F-strings (Python 3.6+):\n   name = 'Alice'\n   age = 25\n   print(f'{name} is {age} years old')\n\n2. format() method:\n   print('{} is {} years old'.format(name, age))\n\n3. % operator (older style):\n   print('%s is %d years old' % (name, age))\n\n4. Format Specifiers:\n   - :.2f - Float with 2 decimals\n   - :>10 - Right align, width 10\n   - :<10 - Left align, width 10\n   - :^10 - Center align, width 10",
+          "exercise": {
+            "title": "Profile Formatter",
+            "description": "Create a program that formats and prints user profile information.",
+            "starterCode": "name = 'John Doe'\nage = 30\nheight = 1.75\n\n# Format and print profile information\n# Use different formatting methods\n",
+            "hint": "Try using f-strings and format() method",
+            "test_cases": [
+              {
+                "input": "",
+                "expected": "Name: John Doe\nAge: 30\nHeight: 1.75m\n",
+                "description": "String formatting test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 9,
+          "title": "Basic Error Handling",
+          "content": "Error handling helps manage potential issues in your code:\n\n1. Try-Except Block:\ntry:\n    # Code that might raise an error\n    result = 10 / 0\nexcept:\n    # Handle the error\n    print('An error occurred')\n\n2. Common Exceptions:\n   - ZeroDivisionError\n   - ValueError\n   - TypeError\n   - NameError\n\n3. Multiple Except Blocks:\ntry:\n    num = int('abc')\nexcept ValueError:\n    print('Invalid number')\nexcept TypeError:\n    print('Type error')\n\n4. Finally Block:\n   - Always executes after try-except\n   - Used for cleanup operations",
+          "exercise": {
+            "title": "Safe Calculator",
+            "description": "Create a calculator that handles potential errors (division by zero, invalid input).",
+            "starterCode": "def divide(a, b):\n    # Implement division with error handling\n    pass\n\n# Test the function with various inputs\n",
+            "hint": "Use try-except to handle ZeroDivisionError",
+            "test_cases": [
+              {
+                "input": "10,2",
+                "expected": "5.0\n",
+                "description": "Valid division test"
+              },
+              {
+                "input": "10,0",
+                "expected": "Cannot divide by zero\n",
+                "description": "Zero division test"
+              }
+            ]
+          }
+        },
+        {
+          "day": 10,
+          "title": "Review and Practice",
+          "content": "Let's review the key concepts from White Belt:\n\n1. Basic Syntax:\n   - Print statements\n   - Comments\n   - Indentation\n\n2. Variables and Data Types:\n   - Strings, integers, floats, booleans\n   - Type conversion\n\n3. Operations:\n   - Mathematical operations\n   - String operations\n   - Boolean operations\n\n4. String Methods:\n   - len(), upper(), lower()\n   - strip(), replace(), split()\n\n5. Input and Output:\n   - input() function\n   - print() function\n   - String formatting\n\n6. Error Handling:\n   - try-except blocks\n   - Common exceptions",
+          "exercise": {
+            "title": "Temperature Converter",
+            "description": "Create a program that converts temperatures between Celsius and Fahrenheit with error handling.",
+            "starterCode": "def celsius_to_fahrenheit(celsius):\n    # Formula: (C × 9/5) + 32 = F\n    pass\n\ndef fahrenheit_to_celsius(fahrenheit):\n    # Formula: (F - 32) × 5/9 = C\n    pass\n\n# Test both functions with error handling\n",
+            "hint": "Remember to handle invalid inputs with try-except",
+            "test_cases": [
+              {
+                "input": "100,c",
+                "expected": "212.0°F\n",
+                "description": "Celsius to Fahrenheit test"
+              },
+              {
+                "input": "212,f",
+                "expected": "100.0°C\n",
+                "description": "Fahrenheit to Celsius test"
               }
             ]
           }
@@ -28,67 +201,94 @@
       ]
     },
     {
-      "name": "yellow",
+      "name": "Yellow Belt",
       "color": "#FFD700",
       "startDay": 11,
       "endDay": 20,
       "requiredDays": 10,
-      "days": []
+      "description": "Control Flow & Functions - If/Else, Loops, and Function Definitions",
+      "days": [
+        {
+          "day": 11,
+          "title": "If Statements and Loops",
+          "content": "Learn about conditional statements and different types of loops in Python.",
+          "exercise": {
+            "title": "Number Checker",
+            "description": "Write a program that checks if a number is positive, negative, or zero.",
+            "starterCode": "def check_number(num):\n    # Your code here\n    pass\n",
+            "hint": "Use if, elif, and else statements",
+            "test_cases": [
+              {
+                "input": "5",
+                "expected": "Positive",
+                "description": "Positive number test"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
-      "name": "orange",
+      "name": "Orange Belt",
       "color": "#FFA500",
       "startDay": 21,
       "endDay": 30,
       "requiredDays": 10,
+      "description": "Data Structures - Lists, Dictionaries, Sets, and Tuples",
       "days": []
     },
     {
-      "name": "green",
+      "name": "Green Belt",
       "color": "#008000",
       "startDay": 31,
-      "endDay": 40,
-      "requiredDays": 10,
+      "endDay": 45,
+      "requiredDays": 15,
+      "description": "Object-Oriented Programming - Classes, Objects, and Inheritance",
       "days": []
     },
     {
-      "name": "blue",
+      "name": "Blue Belt",
       "color": "#0000FF",
-      "startDay": 41,
-      "endDay": 50,
-      "requiredDays": 10,
-      "days": []
-    },
-    {
-      "name": "purple",
-      "color": "#800080",
-      "startDay": 51,
+      "startDay": 46,
       "endDay": 60,
-      "requiredDays": 10,
+      "requiredDays": 15,
+      "description": "File Operations & Error Handling - File I/O and Exception Handling",
       "days": []
     },
     {
-      "name": "red",
-      "color": "#FF0000",
+      "name": "Purple Belt",
+      "color": "#800080",
       "startDay": 61,
-      "endDay": 70,
-      "requiredDays": 10,
+      "endDay": 75,
+      "requiredDays": 15,
+      "description": "Advanced Python - Decorators, Generators, and Context Managers",
       "days": []
     },
     {
-      "name": "brown",
+      "name": "Brown Belt",
       "color": "#8B4513",
-      "startDay": 71,
-      "endDay": 90,
-      "requiredDays": 20,
+      "startDay": 76,
+      "endDay": 85,
+      "requiredDays": 10,
+      "description": "Web Development - Flask, APIs, and Database Integration",
       "days": []
     },
     {
-      "name": "black",
-      "color": "#000000",
-      "startDay": 91,
-      "endDay": 100,
+      "name": "Red Belt",
+      "color": "#FF0000",
+      "startDay": 86,
+      "endDay": 95,
       "requiredDays": 10,
+      "description": "Data Science & Machine Learning - NumPy, Pandas, and Scikit-learn",
+      "days": []
+    },
+    {
+      "name": "Black Belt",
+      "color": "#000000",
+      "startDay": 96,
+      "endDay": 100,
+      "requiredDays": 5,
+      "description": "Advanced Projects & Mastery - Full Stack Development and AI",
       "days": []
     }
   ]
