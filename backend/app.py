@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, current_app
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, get_jwt, create_access_token
 from functools import wraps
@@ -14,9 +14,10 @@ from models import db, User
 import json
 import codecs
 from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
 import sqlite3
+from dateutil import tz
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -24,7 +25,24 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Accept"],
+        "supports_credentials": True
+    }
+})
+
+# Ensure CORS headers are added to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '86400')
+    return response
 
 # Load environment variables
 load_dotenv()
@@ -63,29 +81,43 @@ def get_db():
     return get_db.db
 
 def init_db():
-    db = get_db()
-    cursor = db.cursor()
-    
-    # Create tables
-    cursor.executescript('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            username TEXT NOT NULL,
-            role TEXT DEFAULT 'student'
-        );
+    """Initialize the database."""
+    try:
+        db_path = os.path.join(os.path.dirname(__file__), 'hackdojo.db')
+        # Remove existing database if it exists
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            
+        db = sqlite3.connect(db_path)
         
-        CREATE TABLE IF NOT EXISTS user_progress (
-            user_id INTEGER PRIMARY KEY,
-            current_day INTEGER DEFAULT 1,
-            current_belt TEXT DEFAULT 'white',
-            completed_days TEXT DEFAULT '[]',
-            unlocked_belts TEXT DEFAULT '["white"]',
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        );
-    ''')
-    
-    db.commit()
-    logger.info("Database initialized successfully!")
+        # Read schema.sql
+        with open(os.path.join(os.path.dirname(__file__), 'schema.sql'), 'r') as f:
+            db.executescript(f.read())
+            
+        # Create test user if it doesn't exist
+        cursor = db.cursor()
+        cursor.execute('SELECT id FROM users WHERE username = ?', ('test',))
+        if not cursor.fetchone():
+            # Create a test user with password 'test'
+            cursor.execute(
+                'INSERT INTO users (username, password_hash, email, role) VALUES (?, ?, ?, ?)',
+                ('test', generate_password_hash('test'), 'test@example.com', 'student')
+            )
+            
+            # Initialize progress for test user
+            cursor.execute('SELECT last_insert_rowid()')
+            user_id = cursor.fetchone()[0]
+            cursor.execute(
+                'INSERT INTO user_progress (user_id, current_belt_id, current_day, completed_days) VALUES (?, ?, ?, ?)',
+                (user_id, 1, 1, '[]')
+            )
+            
+        db.commit()
+        db.close()
+        logger.info('Database initialized successfully')
+    except Exception as e:
+        logger.error(f'Error initializing database: {str(e)}', exc_info=True)
+        raise
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hackdojo.db'
@@ -98,15 +130,15 @@ app.register_blueprint(parent_bp, url_prefix='/api/parent')
 app.register_blueprint(student_bp, url_prefix='/api/student')
 
 # CORS configuration
-CORS(app, 
-     resources={
-         r"/api/*": {
-             "origins": ["http://localhost:3000", "http://localhost:3001"],
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization", "Accept"],
-             "supports_credentials": True
-         }
-     })
+# CORS(app, 
+#      resources={
+#          r"/api/*": {
+#              "origins": ["http://localhost:3000", "http://localhost:3001"],
+#              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#              "allow_headers": ["Content-Type", "Authorization", "Accept"],
+#              "supports_credentials": True
+#          }
+#      })
 
 def admin_required(f):
     @wraps(f)
@@ -127,18 +159,6 @@ def parent_required(f):
             return jsonify({"msg": "Parent access required"}), 403
         return f(*args, **kwargs)
     return decorated_function
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')
-    
-    origin = request.headers.get('Origin')
-    if origin in ['http://localhost:3000', 'http://localhost:3001']:
-        response.headers.set('Access-Control-Allow-Origin', origin)
-    
-    return response
 
 # Admin-only routes
 @app.route('/api/admin/users', methods=['GET'])
@@ -320,17 +340,48 @@ def admin_get_analytics():
 @jwt_required()
 def get_curriculum():
     try:
+        current_user_id = get_jwt_identity()
+        logger.info(f"Fetching curriculum for user: {current_user_id}")
+        
+        if not current_user_id:
+            logger.error("No user ID found in JWT token")
+            return jsonify({
+                'error': True,
+                'message': 'Authentication failed - invalid token'
+            }), 401
+
+        # Verify token is not expired
+        jwt_data = get_jwt()
+        if jwt_data and jwt_data.get('exp', 0) < datetime.now(timezone.utc).timestamp():
+            logger.error("Token has expired")
+            return jsonify({
+                'error': True, 
+                'message': 'Authentication failed - token expired'
+            }), 401
+
         curriculum = load_curriculum()
-        if not curriculum or 'belts' not in curriculum:
+        if not curriculum:
+            logger.error("Failed to load curriculum data")
+            return jsonify({
+                'error': True,
+                'message': 'Failed to load curriculum data'
+            }), 500
+
+        if 'belts' not in curriculum:
+            logger.error("Invalid curriculum format - missing belts")
             return jsonify({
                 'error': True,
                 'message': 'Invalid curriculum format'
             }), 500
+
+        logger.info("Successfully fetched curriculum")
         return jsonify(curriculum)
+
     except Exception as e:
+        logger.error(f"Error in get_curriculum: {str(e)}", exc_info=True)
         return jsonify({
             'error': True,
-            'message': str(e)
+            'message': f'Server error: {str(e)}'
         }), 500
 
 @app.route('/api/lesson/<int:day>', methods=['GET'])
@@ -464,7 +515,121 @@ def run_code():
             'message': f'Server error: {str(e)}'
         }), 500
 
-@app.route('/api/progress', methods=['POST'])
+@app.route('/api/progress', methods=['GET'])
+@jwt_required()
+def get_progress():
+    db = None
+    try:
+        current_user_id = get_jwt_identity()
+        logger.info(f"Fetching progress for user: {current_user_id}")
+        
+        if not current_user_id:
+            logger.error("No user ID found in JWT token")
+            return jsonify({
+                'error': True,
+                'message': 'Authentication failed: No user ID found'
+            }), 401
+
+        db = get_db()
+        cursor = db.cursor()
+        
+        # First check if user exists
+        cursor.execute('SELECT id FROM users WHERE id = ?', (current_user_id,))
+        user = cursor.fetchone()
+        if not user:
+            logger.error(f"User not found: {current_user_id}")
+            return jsonify({
+                'error': True,
+                'message': 'User not found'
+            }), 404
+        
+        # Check if user has progress record
+        cursor.execute('SELECT * FROM user_progress WHERE user_id = ?', (current_user_id,))
+        progress = cursor.fetchone()
+        if not progress:
+            logger.info(f"No progress found for user {current_user_id}, creating initial progress")
+            # Initialize progress for new user
+            cursor.execute('''
+                INSERT INTO user_progress (user_id, current_day, completed_days, current_belt_id)
+                VALUES (?, 1, '[]', 1)
+            ''', (current_user_id,))
+            db.commit()
+        
+        # Get user's progress and current belt info
+        cursor.execute('''
+            SELECT up.completed_days, up.current_day, b.* 
+            FROM user_progress up
+            LEFT JOIN belts b ON up.current_belt_id = b.id
+            WHERE up.user_id = ?
+        ''', (current_user_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            logger.error(f"Failed to fetch progress after initialization for user {current_user_id}")
+            return jsonify({
+                'error': True,
+                'message': 'Failed to fetch user progress'
+            }), 500
+        
+        # Get all belts for progress display
+        cursor.execute('SELECT * FROM belts ORDER BY start_day')
+        belts = [{
+            'id': row[0],
+            'name': row[1],
+            'color': row[2],
+            'start_day': row[3],
+            'days_required': row[4],
+            'description': row[5]
+        } for row in cursor.fetchall()]
+        
+        completed_days = json.loads(result[0]) if result[0] else []
+        current_day = result[1] or 1
+        belt_info = {
+            'id': result[2],
+            'name': result[3],
+            'color': result[4],
+            'start_day': result[5],
+            'days_required': result[6],
+            'description': result[7]
+        }
+        
+        response_data = {
+            'completed_days': completed_days,
+            'current_day': current_day,
+            'current_belt': belt_info,
+            'all_belts': belts
+        }
+        
+        logger.info(f"Successfully fetched progress for user {current_user_id}")
+        return jsonify(response_data)
+
+    except sqlite3.Error as e:
+        logger.error(f"Database error in get_progress: {str(e)}", exc_info=True)
+        if db:
+            db.rollback()
+        return jsonify({
+            'error': True,
+            'message': 'Database error occurred'
+        }), 500
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error in get_progress: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': True,
+            'message': 'Invalid progress data format'
+        }), 500
+    except Exception as e:
+        logger.error(f"Unexpected error in get_progress: {str(e)}", exc_info=True)
+        if db:
+            db.rollback()
+        return jsonify({
+            'error': True,
+            'message': f'Server error: {str(e)}'
+        }), 500
+    finally:
+        if db:
+            db.close()
+
+@app.route('/api/progress/update', methods=['POST'])
 @jwt_required()
 def update_progress():
     try:
@@ -475,59 +640,89 @@ def update_progress():
             return jsonify({'error': 'Day number is required'}), 400
             
         day = data['day']
-        success = data.get('success', True)  # Default to True if not specified
+        success = data.get('success', True)
         
-        # Get current user's progress
-        user_progress = get_user_progress(current_user_id)
+        db = get_db()
+        cursor = db.cursor()
         
-        # Update progress
+        # Get current progress and belt info
+        cursor.execute('''
+            SELECT up.completed_days, up.current_day, up.current_belt_id, b.start_day, b.days_required
+            FROM user_progress up
+            JOIN belts b ON up.current_belt_id = b.id
+            WHERE up.user_id = ?
+        ''', (current_user_id,))
+        
+        progress = cursor.fetchone()
+        
+        if not progress:
+            return jsonify({'error': 'Progress not found'}), 404
+            
+        completed_days = json.loads(progress[0]) if progress[0] else []
+        current_day = progress[1]
+        current_belt_id = progress[2]
+        belt_start_day = progress[3]
+        belt_days_required = progress[4]
+        
         if success:
-            completed_days = user_progress['completed_days']
+            # Add completed day if not already present
             if day not in completed_days:
                 completed_days.append(day)
                 completed_days.sort()
             
-            # Calculate next day
+            # Update current_day if this is a new completion
             next_day = day + 1
+            if next_day > current_day:
+                current_day = next_day
             
-            # Get curriculum to check belt boundaries
-            with open('curriculum.json', 'r') as f:
-                curriculum = json.load(f)
+            # Check if we need to advance to next belt
+            days_completed_in_belt = len([d for d in completed_days if belt_start_day <= d < belt_start_day + belt_days_required])
             
-            current_belt = None
-            for belt in curriculum['belts']:
-                if belt['startDay'] <= day <= belt['endDay']:
-                    current_belt = belt['name']
-                    if next_day > belt['endDay']:
-                        next_day = None  # End of belt reached
-                    break
-            
-            # Update user_progress table
-            db = get_db()
-            cursor = db.cursor()
-            
-            cursor.execute('''
-                UPDATE user_progress 
-                SET completed_days = ?, 
-                    current_day = ?, 
-                    current_belt = ?
-                WHERE user_id = ?
-            ''', (
-                json.dumps(completed_days),
-                next_day if next_day else day,
-                current_belt,
-                current_user_id
-            ))
-            
-            db.commit()
-            
-            return jsonify({
-                'success': True,
-                'completed_days': completed_days,
-                'current_day': next_day if next_day else day,
-                'current_belt': current_belt,
-                'next_day': next_day
-            })
+            if days_completed_in_belt >= belt_days_required:
+                # Get next belt info
+                cursor.execute('''
+                    SELECT id, start_day 
+                    FROM belts 
+                    WHERE start_day > ? 
+                    ORDER BY start_day 
+                    LIMIT 1
+                ''', (belt_start_day,))
+                
+                next_belt = cursor.fetchone()
+                if next_belt:
+                    current_belt_id = next_belt[0]
+                    belt_start_day = next_belt[1]
+        
+        # Update progress in database
+        cursor.execute('''
+            UPDATE user_progress 
+            SET completed_days = ?,
+                current_day = ?,
+                current_belt_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        ''', (json.dumps(completed_days), current_day, current_belt_id, current_user_id))
+        
+        db.commit()
+        
+        # Get updated belt info for response
+        cursor.execute('SELECT * FROM belts WHERE id = ?', (current_belt_id,))
+        belt = cursor.fetchone()
+        belt_info = {
+            'name': belt[1],
+            'color': belt[2],
+            'start_day': belt[3],
+            'days_required': belt[4],
+            'description': belt[5]
+        }
+        
+        return jsonify({
+            'success': True,
+            'completed_days': completed_days,
+            'current_day': current_day,
+            'current_belt': belt_info,
+            'next_day': next_day if next_day <= 100 else None
+        })
             
     except Exception as e:
         logger.error(f"Error updating progress: {str(e)}", exc_info=True)
@@ -743,18 +938,21 @@ def update_user_progress(user_id, day, success):
 def create_demo_accounts():
     with app.app_context():
         try:
+            logger.debug("Starting to create demo accounts...")
             # Create demo accounts with hashed passwords
             demo_accounts = [
-                ('admin@hackdojo.com', 'admin123', 'admin'),
-                ('parent@hackdojo.com', 'parent123', 'parent'),
-                ('student@hackdojo.com', 'student123', 'student')
+                ('admin', 'admin@hackdojo.com', 'admin123', 'admin'),
+                ('parent', 'parent@hackdojo.com', 'parent123', 'parent'),
+                ('student', 'student@hackdojo.com', 'student123', 'student')
             ]
             
-            for email, password, role in demo_accounts:
+            for username, email, password, role in demo_accounts:
                 # Check if user already exists
-                if not User.query.filter_by(email=email).first():
+                existing_user = User.query.filter_by(email=email).first()
+                if not existing_user:
                     # Create new user
                     user = User(
+                        username=username,
                         email=email,
                         password_hash=generate_password_hash(password),
                         role=role,
@@ -762,14 +960,62 @@ def create_demo_accounts():
                         last_login=datetime.utcnow()
                     )
                     db.session.add(user)
-                    print(f"Created {role} account: {email}")
+                    logger.debug(f"Created {role} account: {email} with password_hash: {user.password_hash[:20]}...")
+                else:
+                    logger.debug(f"User {email} already exists")
             
             db.session.commit()
-            print("Demo accounts created successfully!")
+            logger.debug("Demo accounts created successfully!")
+            
+            # Verify accounts were created
+            for _, email, _, _ in demo_accounts:
+                user = User.query.filter_by(email=email).first()
+                if user:
+                    logger.debug(f"Verified user {email} exists with password_hash: {user.password_hash[:20]}...")
+                else:
+                    logger.debug(f"WARNING: User {email} was not found after creation!")
             
         except Exception as e:
-            print(f"Error creating demo accounts: {str(e)}")
+            logger.error(f"Error creating demo accounts: {str(e)}")
             db.session.rollback()
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        email = data.get('email', '').lower()
+        password = data.get('password', '')
+
+        logger.debug(f"Login attempt for email: {email}")
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        # Get user from SQLAlchemy
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            logger.debug(f"Found user {email} with password_hash: {user.password_hash[:20]}...")
+            is_valid = check_password_hash(user.password_hash, password)
+            logger.debug(f"Password check result: {is_valid}")
+        else:
+            logger.debug(f"No user found with email: {email}")
+
+        if not user or not check_password_hash(user.password_hash, password):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        else:
+            access_token = create_access_token(identity=user.id)
+            return jsonify(access_token=access_token), 200
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in login: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': True,
+            'message': f'Server error: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     init_db()
