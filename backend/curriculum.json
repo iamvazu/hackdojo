@@ -82,18 +82,18 @@
         },
         {
           "day": 5,
-          "title": "Input and Type Conversion",
-          "content": "Python's input() function allows us to get user input:\n\n1. Basic Input:\n   name = input('Enter your name: ')\n\n2. Type Conversion:\n   - All input is received as strings\n   - Convert to numbers using int() or float()\n   \nExample:\nage_str = input('Enter age: ')\nage = int(age_str)\n\nheight_str = input('Enter height: ')\nheight = float(height_str)\n\nCommon Conversions:\n- str(): Convert to string\n- int(): Convert to integer\n- float(): Convert to float\n- bool(): Convert to boolean",
+          "title": "User Input and Age Calculator",
+          "content": "In Python, we can get input from users using the input() function. Let's create an age calculator that:\n\n1. Asks for the user's birth year\n2. Calculates their age\n3. Displays the result",
           "exercise": {
             "title": "Age Calculator",
-            "description": "Write a program that asks for birth year and calculates age.",
-            "starterCode": "# Get birth year from user and calculate age\n# Current year is 2024\n\n",
-            "hint": "Remember to convert input string to integer",
+            "description": "Create a program that asks for the user's birth year and calculates their age. Use input() to get the birth year.",
+            "starterCode": "# Ask for birth year\nbirth_year = int(input('Enter your birth year: '))\n\n# Calculate and print the age\n",
+            "hint": "Remember to convert the input to an integer using int()",
             "test_cases": [
               {
-                "input": "2000",
-                "expected": "You are 24 years old.\n",
-                "description": "Age calculation test"
+                "input": "1990",
+                "expected": "Enter your birth year: You are 34 years old\n",
+                "description": "Calculate age for birth year 1990"
               }
             ]
           }
@@ -103,15 +103,15 @@
           "title": "Boolean Operations",
           "content": "Boolean operations are fundamental for making decisions in programming:\n\n1. Comparison Operators:\n   - Equal to: ==\n   - Not equal to: !=\n   - Greater than: >\n   - Less than: <\n   - Greater than or equal to: >=\n   - Less than or equal to: <=\n\n2. Logical Operators:\n   - and: Both conditions must be True\n   - or: At least one condition must be True\n   - not: Inverts the boolean value\n\nExamples:\nx = 5\ny = 10\nprint(x < y)  # True\nprint(x == y)  # False\nprint(not x < y)  # False",
           "exercise": {
-            "title": "Number Comparison",
-            "description": "Write a program that compares two numbers and prints whether they are equal, and if not, which one is larger.",
-            "starterCode": "num1 = 15\nnum2 = 20\n\n# Compare the numbers and print the result\n",
-            "hint": "Use if statements with comparison operators",
+            "title": "Compare Numbers",
+            "description": "Write a program that compares two numbers and prints whether the first number is greater than, less than, or equal to the second number.",
+            "starterCode": "# Compare two numbers\nnum1 = 15\nnum2 = 10\n\n# Print the comparison result\n",
+            "hint": "Use if-elif-else statements with comparison operators",
             "test_cases": [
               {
                 "input": "",
-                "expected": "20 is larger than 15\n",
-                "description": "Number comparison test"
+                "expected": "15 is greater than 10\n",
+                "description": "Compare two numbers"
               }
             ]
           }
@@ -206,7 +206,7 @@
       "startDay": 11,
       "endDay": 20,
       "requiredDays": 10,
-      "description": "Control Flow & Functions - If/Else, Loops, and Function Definitions",
+      "description": "Python Control Flow and Functions",
       "days": [
         {
           "day": 11,
@@ -220,8 +220,175 @@
             "test_cases": [
               {
                 "input": "5",
-                "expected": "Positive",
-                "description": "Positive number test"
+                "expected": "Positive\n",
+                "description": "Test positive number"
+              }
+            ]
+          }
+        },
+        {
+          "day": 12,
+          "title": "For Loops",
+          "content": "Learn about for loops and how to iterate over sequences in Python.",
+          "exercise": {
+            "title": "Sum Calculator",
+            "description": "Write a program that calculates the sum of numbers from 1 to n.",
+            "starterCode": "def calculate_sum(n):\n    # Your code here\n    pass\n",
+            "hint": "Use a for loop with range()",
+            "test_cases": [
+              {
+                "input": "5",
+                "expected": "15\n",
+                "description": "Sum of numbers 1 to 5"
+              }
+            ]
+          }
+        },
+        {
+          "day": 13,
+          "title": "While Loops",
+          "content": "Learn about while loops and when to use them instead of for loops.",
+          "exercise": {
+            "title": "Countdown Timer",
+            "description": "Write a program that counts down from n to 1.",
+            "starterCode": "def countdown(n):\n    # Your code here\n    pass\n",
+            "hint": "Use a while loop to decrement n",
+            "test_cases": [
+              {
+                "input": "5",
+                "expected": "5\n4\n3\n2\n1\n",
+                "description": "Countdown from 5"
+              }
+            ]
+          }
+        },
+        {
+          "day": 14,
+          "title": "Functions Basics",
+          "content": "Learn about functions, parameters, and return values.",
+          "exercise": {
+            "title": "Temperature Converter",
+            "description": "Write a function that converts Celsius to Fahrenheit.",
+            "starterCode": "def celsius_to_fahrenheit(celsius):\n    # Your code here\n    pass\n",
+            "hint": "Formula: F = (C * 9/5) + 32",
+            "test_cases": [
+              {
+                "input": "0",
+                "expected": "32.0\n",
+                "description": "Convert 0°C to °F"
+              }
+            ]
+          }
+        },
+        {
+          "day": 15,
+          "title": "Function Parameters",
+          "content": "Learn about different types of function parameters in Python.",
+          "exercise": {
+            "title": "Greeting Generator",
+            "description": "Write a function that creates personalized greetings.",
+            "starterCode": "def create_greeting(name, greeting='Hello'):\n    # Your code here\n    pass\n",
+            "hint": "Use default parameters",
+            "test_cases": [
+              {
+                "input": "John",
+                "expected": "Hello, John!\n",
+                "description": "Basic greeting"
+              }
+            ]
+          }
+        },
+        {
+          "day": 16,
+          "title": "Return Values",
+          "content": "Learn about returning multiple values from functions.",
+          "exercise": {
+            "title": "Rectangle Calculator",
+            "description": "Write a function that returns both area and perimeter of a rectangle.",
+            "starterCode": "def calculate_rectangle(length, width):\n    # Your code here\n    pass\n",
+            "hint": "Return multiple values using a tuple",
+            "test_cases": [
+              {
+                "input": "4,5",
+                "expected": "Area: 20, Perimeter: 18\n",
+                "description": "Calculate rectangle properties"
+              }
+            ]
+          }
+        },
+        {
+          "day": 17,
+          "title": "Nested Functions",
+          "content": "Learn about defining functions inside other functions.",
+          "exercise": {
+            "title": "Power Calculator",
+            "description": "Write a function that returns powers of a number.",
+            "starterCode": "def create_power_function(power):\n    # Your code here\n    pass\n",
+            "hint": "Use a nested function",
+            "test_cases": [
+              {
+                "input": "2,3",
+                "expected": "8\n",
+                "description": "Calculate 2^3"
+              }
+            ]
+          }
+        },
+        {
+          "day": 18,
+          "title": "Lambda Functions",
+          "content": "Learn about anonymous functions in Python.",
+          "exercise": {
+            "title": "Sorting with Lambda",
+            "description": "Write a program that sorts a list of tuples using a lambda function.",
+            "starterCode": "def sort_by_second(pairs):\n    # Your code here\n    pass\n",
+            "hint": "Use sorted() with a lambda key",
+            "test_cases": [
+              {
+                "input": "[(1,2), (3,1), (4,0)]",
+                "expected": "[(4,0), (3,1), (1,2)]\n",
+                "description": "Sort by second element"
+              }
+            ]
+          }
+        },
+        {
+          "day": 19,
+          "title": "List Comprehension",
+          "content": "Learn about creating lists using comprehension syntax.",
+          "exercise": {
+            "title": "Even Number Filter",
+            "description": "Write a program that filters even numbers using list comprehension.",
+            "starterCode": "def get_even_numbers(numbers):\n    # Your code here\n    pass\n",
+            "hint": "Use list comprehension with a condition",
+            "test_cases": [
+              {
+                "input": "[1,2,3,4,5,6]",
+                "expected": "[2,4,6]\n",
+                "description": "Filter even numbers"
+              }
+            ]
+          }
+        },
+        {
+          "day": 20,
+          "title": "Error Handling",
+          "content": "Learn about try-except blocks and handling exceptions.",
+          "exercise": {
+            "title": "Safe Division",
+            "description": "Write a function that safely divides two numbers.",
+            "starterCode": "def safe_divide(a, b):\n    # Your code here\n    pass\n",
+            "hint": "Use try-except to handle ZeroDivisionError",
+            "test_cases": [
+              {
+                "input": "10,2",
+                "expected": "5.0\n",
+                "description": "Normal division"
+              },
+              {
+                "input": "10,0",
+                "expected": "Error: Cannot divide by zero\n",
+                "description": "Division by zero"
               }
             ]
           }
@@ -234,8 +401,189 @@
       "startDay": 21,
       "endDay": 30,
       "requiredDays": 10,
-      "description": "Data Structures - Lists, Dictionaries, Sets, and Tuples",
-      "days": []
+      "description": "Python Data Structures and File Handling",
+      "days": [
+        {
+          "day": 21,
+          "title": "Lists Basics",
+          "content": "Learn about Python lists and basic operations.",
+          "exercise": {
+            "title": "List Operations",
+            "description": "Write functions to perform basic list operations.",
+            "starterCode": "def list_operations(numbers):\n    # Your code here\n    pass\n",
+            "hint": "Use append(), insert(), and remove()",
+            "test_cases": [
+              {
+                "input": "[1,2,3]",
+                "expected": "[1,2,3,4]\n[0,1,2,3,4]\n[0,1,3,4]\n",
+                "description": "Basic list operations"
+              }
+            ]
+          }
+        },
+        {
+          "day": 22,
+          "title": "List Methods",
+          "content": "Learn about advanced list methods in Python.",
+          "exercise": {
+            "title": "List Sorter",
+            "description": "Write a program that sorts a list in both ascending and descending order.",
+            "starterCode": "def sort_list(numbers):\n    # Your code here\n    pass\n",
+            "hint": "Use sort() and reverse()",
+            "test_cases": [
+              {
+                "input": "[3,1,4,1,5,9,2,6,5]",
+                "expected": "Ascending: [1,1,2,3,4,5,5,6,9]\nDescending: [9,6,5,5,4,3,2,1,1]\n",
+                "description": "Sort list both ways"
+              }
+            ]
+          }
+        },
+        {
+          "day": 23,
+          "title": "Dictionaries",
+          "content": "Learn about Python dictionaries and key-value pairs.",
+          "exercise": {
+            "title": "Word Counter",
+            "description": "Write a program that counts word frequency in a sentence.",
+            "starterCode": "def count_words(sentence):\n    # Your code here\n    pass\n",
+            "hint": "Use a dictionary to store word counts",
+            "test_cases": [
+              {
+                "input": "hello world hello python",
+                "expected": "{'hello': 2, 'world': 1, 'python': 1}\n",
+                "description": "Count word frequency"
+              }
+            ]
+          }
+        },
+        {
+          "day": 24,
+          "title": "Sets",
+          "content": "Learn about Python sets and their operations.",
+          "exercise": {
+            "title": "Unique Numbers",
+            "description": "Write a program that finds unique elements from two lists.",
+            "starterCode": "def find_unique(list1, list2):\n    # Your code here\n    pass\n",
+            "hint": "Use set operations",
+            "test_cases": [
+              {
+                "input": "[1,2,3], [2,3,4]",
+                "expected": "Unique in list1: {1}\nUnique in list2: {4}\nCommon: {2,3}\n",
+                "description": "Find unique elements"
+              }
+            ]
+          }
+        },
+        {
+          "day": 25,
+          "title": "Tuples",
+          "content": "Learn about Python tuples and their immutability.",
+          "exercise": {
+            "title": "Coordinate System",
+            "description": "Write a program that handles 2D coordinates using tuples.",
+            "starterCode": "def calculate_distance(point1, point2):\n    # Your code here\n    pass\n",
+            "hint": "Use tuple unpacking and math.sqrt()",
+            "test_cases": [
+              {
+                "input": "(0,0), (3,4)",
+                "expected": "5.0\n",
+                "description": "Calculate distance between points"
+              }
+            ]
+          }
+        },
+        {
+          "day": 26,
+          "title": "File Reading",
+          "content": "Learn about reading files in Python.",
+          "exercise": {
+            "title": "File Reader",
+            "description": "Write a program that reads a file and counts the lines.",
+            "starterCode": "def count_lines(filename):\n    # Your code here\n    pass\n",
+            "hint": "Use with open() and readlines()",
+            "test_cases": [
+              {
+                "input": "test.txt",
+                "expected": "Number of lines: 5\n",
+                "description": "Count file lines"
+              }
+            ]
+          }
+        },
+        {
+          "day": 27,
+          "title": "File Writing",
+          "content": "Learn about writing to files in Python.",
+          "exercise": {
+            "title": "File Writer",
+            "description": "Write a program that creates a log file with timestamps.",
+            "starterCode": "def create_log(filename, messages):\n    # Your code here\n    pass\n",
+            "hint": "Use with open() in write mode",
+            "test_cases": [
+              {
+                "input": "log.txt, ['Start', 'Processing', 'End']",
+                "expected": "Log file created with 3 entries\n",
+                "description": "Create log file"
+              }
+            ]
+          }
+        },
+        {
+          "day": 28,
+          "title": "JSON Handling",
+          "content": "Learn about working with JSON data in Python.",
+          "exercise": {
+            "title": "JSON Parser",
+            "description": "Write a program that reads and modifies JSON data.",
+            "starterCode": "def update_json(data, key, value):\n    # Your code here\n    pass\n",
+            "hint": "Use json.loads() and json.dumps()",
+            "test_cases": [
+              {
+                "input": "{'name': 'John'}, 'age', 25",
+                "expected": "{'name': 'John', 'age': 25}\n",
+                "description": "Update JSON data"
+              }
+            ]
+          }
+        },
+        {
+          "day": 29,
+          "title": "CSV Files",
+          "content": "Learn about working with CSV files in Python.",
+          "exercise": {
+            "title": "CSV Processor",
+            "description": "Write a program that reads and processes CSV data.",
+            "starterCode": "def process_csv(filename):\n    # Your code here\n    pass\n",
+            "hint": "Use the csv module",
+            "test_cases": [
+              {
+                "input": "data.csv",
+                "expected": "Total rows: 10\nAverage age: 35\n",
+                "description": "Process CSV data"
+              }
+            ]
+          }
+        },
+        {
+          "day": 30,
+          "title": "File System Operations",
+          "content": "Learn about working with directories and paths.",
+          "exercise": {
+            "title": "File Organizer",
+            "description": "Write a program that organizes files by extension.",
+            "starterCode": "def organize_files(directory):\n    # Your code here\n    pass\n",
+            "hint": "Use os.path and shutil",
+            "test_cases": [
+              {
+                "input": "./files",
+                "expected": "Organized 10 files into 3 categories\n",
+                "description": "Organize files by type"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "Green Belt",

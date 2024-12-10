@@ -2,12 +2,21 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
+const API_URL = 'http://localhost:5000/api';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    };
+  };
 
   useEffect(() => {
     // Check for stored token on mount
@@ -19,7 +28,9 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const handleRoleRedirect = (role) => {
+  const handleRoleRedirect = (role, isInitialLoad = false) => {
+    if (isInitialLoad) return; // Skip redirect on initial load
+    
     switch (role) {
       case 'student':
         navigate('/student');
@@ -37,59 +48,86 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async (token) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        headers: getAuthHeaders(),
+        credentials: 'include'
       });
 
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
         localStorage.setItem('token', token);
-        handleRoleRedirect(data.user.role);
       } else {
         localStorage.removeItem('token');
         setUser(null);
-        navigate('/login');
       }
     } catch (err) {
       console.error('Error fetching user profile:', err);
       localStorage.removeItem('token');
       setUser(null);
-      navigate('/login');
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (email, password) => {
+    setLoading(true);
+    setError(null);
     try {
-      setError(null);
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setUser(data.user);
-        handleRoleRedirect(data.user.role);
-        return true;
+        localStorage.setItem('token', data.access_token);
+        await fetchUserProfile(data.access_token);
+        handleRoleRedirect(user?.role);
       } else {
-        setError(data.message || 'Login failed');
-        return false;
+        throw new Error(data.message || 'Login failed');
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('An error occurred during login');
-      return false;
+      setError(err.message || 'An error occurred during login');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (userData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // After registration, log them in
+        await login(userData.email, userData.password);
+      } else {
+        throw new Error(data.message || 'Registration failed');
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      setError(err.message || 'An error occurred during registration');
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,21 +137,18 @@ export const AuthProvider = ({ children }) => {
     navigate('/login');
   };
 
-  const value = {
-    user,
-    loading,
-    error,
-    login,
-    logout,
-    isAuthenticated: !!user
-  };
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        login,
+        logout,
+        register,
+        getAuthHeaders
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

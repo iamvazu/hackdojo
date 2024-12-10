@@ -2,18 +2,6 @@
 
 export const API_BASE_URL = 'http://localhost:5000';
 
-export const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    console.warn('No authentication token found');
-  }
-  return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : ''
-  };
-};
-
 export const fetchWithAuth = async (endpoint, options = {}) => {
   try {
     const token = localStorage.getItem('token');
@@ -22,55 +10,76 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
     }
 
     const defaultOptions = {
-      mode: 'cors',
-      credentials: 'include',
+      method: options.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         'Authorization': `Bearer ${token}`
       }
     };
 
-    const mergedOptions = {
-      ...defaultOptions,
-      ...options,
-      headers: {
-        ...defaultOptions.headers,
-        ...options.headers
-      }
-    };
-
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log('Making request to:', url);
-    console.log('With options:', JSON.stringify(mergedOptions, null, 2));
-
-    const response = await fetch(url, mergedOptions);
-    
-    if (!response.ok) {
-      let errorMessage = 'An error occurred';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
-      } catch (e) {
-        console.error('Failed to parse error response:', e);
-      }
-
-      if (response.status === 401) {
-        // Clear token and redirect to login for auth failures
-        localStorage.removeItem('token');
-        console.error('Authentication failed:', errorMessage);
-        window.location.href = '/login';
-        throw new Error('Authentication failed: ' + errorMessage);
-      }
-
-      throw new Error(errorMessage);
+    // If there's a body, add it
+    if (options.body) {
+      defaultOptions.body = JSON.stringify(options.body);
     }
 
-    const data = await response.json();
-    return data;
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await fetch(url, defaultOptions);
+    
+    // Handle response
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { message: `HTTP error! status: ${response.status}` };
+      }
+
+      // Create error with additional info
+      const error = new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      error.status = response.status;
+      error.data = errorData;
+      throw error;
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('API request failed:', error);
-    // Re-throw the error to be handled by the component
+    throw error;
+  }
+};
+
+export const updateProgress = async (completedDay) => {
+  try {
+    const response = await fetchWithAuth('/api/progress/update', {
+      method: 'POST',
+      body: { completed_day: completedDay }
+    });
+    return response;
+  } catch (error) {
+    console.error('Failed to update progress:', error);
+    throw error;
+  }
+};
+
+export const fetchLesson = async (day) => {
+  try {
+    const response = await fetchWithAuth(`/api/lesson/${day}`);
+    return response;
+  } catch (error) {
+    console.error('Failed to fetch lesson:', error);
+    throw error;
+  }
+};
+
+export const refreshToken = async () => {
+  try {
+    const response = await fetchWithAuth('/api/auth/refresh');
+    if (response.token) {
+      localStorage.setItem('token', response.token);
+    }
+    return response;
+  } catch (error) {
+    console.error('Failed to refresh token:', error);
     throw error;
   }
 };

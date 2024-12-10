@@ -1,219 +1,131 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
-import api from '../services/api';
+import BeltSystem from './BeltSystem';
+import { fetchWithAuth } from '../utils/api';
 
-const Container = styled.div`
-  padding: 2rem;
+const DashboardContainer = styled.div`
+  padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  min-height: 100vh;
+  background: #1a1a1a;
 `;
 
 const Header = styled.div`
-  margin-bottom: 2rem;
-  h1 {
-    color: #333;
-    margin-bottom: 0.5rem;
-  }
-  p {
-    color: #666;
-  }
-`;
-
-const BeltDisplay = styled.div`
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
+  margin-bottom: 30px;
   text-align: center;
 `;
 
-const BeltBadge = styled.div`
-  display: inline-block;
-  padding: 0.5rem 1.5rem;
-  border-radius: 20px;
-  background: ${props => props.color || '#4CAF50'};
-  color: white;
-  font-weight: bold;
-  margin: 1rem 0;
+const Title = styled.h1`
+  color: #fff;
+  margin-bottom: 10px;
+  font-size: 2.5em;
 `;
 
-const BeltSystem = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
+const Subtitle = styled.p`
+  color: #aaa;
+  font-size: 1.1em;
 `;
 
-const BeltCard = styled.div`
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  border-left: 5px solid ${props => props.color};
-  cursor: ${props => props.isAvailable ? 'pointer' : 'default'};
-  opacity: ${props => props.isAvailable ? 1 : 0.7};
-  
-  h3 {
-    color: ${props => props.color};
-    margin: 0 0 1rem 0;
-  }
-  
-  p {
-    margin: 0;
-    color: #666;
-  }
-  
-  &:hover {
-    transform: ${props => props.isAvailable ? 'translateY(-5px)' : 'none'};
-    transition: transform 0.2s;
-  }
-`;
-
-const ProgressIndicator = styled.div`
-  margin-top: 1rem;
-  
-  .progress-text {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-    font-size: 0.9em;
-    color: #666;
-  }
-`;
-
-const ProgressBar = styled.div`
-  width: 100%;
-  height: 8px;
-  background: #eee;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 1rem;
-  
-  div {
-    height: 100%;
-    background: #4CAF50;
-    width: ${props => props.progress}%;
-    transition: width 0.3s ease;
-  }
-`;
-
-const RecentActivity = styled.div`
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`;
-
-const ActivityItem = styled.div`
-  padding: 0.75rem;
-  border-bottom: 1px solid #eee;
+const LoadingContainer = styled.div`
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  
-  &:last-child {
-    border-bottom: none;
-  }
+  height: 200px;
+  color: #fff;
+`;
+
+const ErrorContainer = styled.div`
+  color: #ff6b6b;
+  text-align: center;
+  padding: 20px;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  margin: 20px 0;
 `;
 
 const StudentDashboard = () => {
-  const [curriculum, setCurriculum] = useState(null);
-  const [userProgress, setUserProgress] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(null);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
   useEffect(() => {
-    const fetchData = async () => {
+    const initializeProgress = async () => {
       try {
-        const [curriculumData, progressData] = await Promise.all([
-          api.getCurriculum(),
-          api.getStudentProgress()
-        ]);
-        setCurriculum(curriculumData);
-        setUserProgress(progressData);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        setLoading(true);
+        setError(null);
+        
+        // First, try to get existing progress
+        const progressResponse = await fetchWithAuth('/api/progress');
+        
+        if (!progressResponse.ok) {
+          if (progressResponse.status === 404) {
+            // If no progress exists, create initial progress
+            const initResponse = await fetchWithAuth('/api/progress/init', {
+              method: 'POST'
+            });
+            
+            if (!initResponse.ok) {
+              throw new Error('Failed to initialize progress');
+            }
+            
+            const initData = await initResponse.json();
+            setProgress(initData);
+          } else {
+            throw new Error('Failed to fetch progress');
+          }
+        } else {
+          const progressData = await progressResponse.json();
+          setProgress(progressData);
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchData();
-  }, []);
-
-  const handleBeltClick = (belt) => {
-    if (belt.isAvailable) {
-      navigate(`/student/lesson/${belt.startDay}`);
+    if (user) {
+      initializeProgress();
     }
-  };
+  }, [user]);
 
-  const renderBelts = () => {
-    if (!curriculum?.belts || !userProgress) return null;
+  if (loading) {
+    return (
+      <DashboardContainer>
+        <LoadingContainer>Loading your progress...</LoadingContainer>
+      </DashboardContainer>
+    );
+  }
 
-    const currentDay = userProgress.current_day || 1;
-    
-    return curriculum.belts.map(belt => {
-      const isAvailable = currentDay >= belt.startDay;
-      const progress = Math.min(100, Math.max(0, 
-        ((currentDay - belt.startDay) / (belt.endDay - belt.startDay + 1)) * 100
-      ));
-
-      return (
-        <BeltCard 
-          key={belt.name}
-          color={belt.color}
-          isAvailable={isAvailable}
-          onClick={() => handleBeltClick({ ...belt, isAvailable })}
-        >
-          <h3>{belt.name}</h3>
-          <p>{belt.description}</p>
-          <ProgressIndicator>
-            <div className="progress-text">
-              <span>Progress</span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <ProgressBar progress={progress}>
-              <div />
-            </ProgressBar>
-          </ProgressIndicator>
-        </BeltCard>
-      );
-    });
-  };
+  if (error) {
+    return (
+      <DashboardContainer>
+        <ErrorContainer>
+          <h2>Error</h2>
+          <p>{error}</p>
+        </ErrorContainer>
+      </DashboardContainer>
+    );
+  }
 
   return (
-    <Container>
+    <DashboardContainer>
       <Header>
-        <h1>Welcome back, {user?.name || 'Student'}!</h1>
-        <p>Continue your Python journey</p>
+        <Title>Welcome back, {user?.name || 'Student'}!</Title>
+        <Subtitle>Continue your coding journey</Subtitle>
       </Header>
-
-      {userProgress && (
-        <BeltDisplay>
-          <h2>Current Belt Level</h2>
-          <BeltBadge color={userProgress.belt_color || '#4CAF50'}>
-            {userProgress.current_belt} Belt
-          </BeltBadge>
-          <p>{userProgress.completed_lessons} lessons completed</p>
-        </BeltDisplay>
-      )}
-
-      <h2>Python Belt System</h2>
-      <BeltSystem>
-        {renderBelts()}
-      </BeltSystem>
-
-      <RecentActivity>
-        <h2>Recent Activity</h2>
-        {userProgress?.recent_activity?.map((activity, index) => (
-          <ActivityItem key={index}>
-            <span>{activity.lesson}</span>
-            <span>{new Date(activity.timestamp).toLocaleDateString()}</span>
-          </ActivityItem>
-        ))}
-      </RecentActivity>
-    </Container>
+      
+      <BeltSystem 
+        progress={progress} 
+        onLessonSelect={(day) => navigate(`/lesson/day${day}`)}
+      />
+    </DashboardContainer>
   );
 };
 

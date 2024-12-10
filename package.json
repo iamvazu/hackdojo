@@ -5,5 +5,10 @@
   "scripts": {
     "build": "cd frontend && npm install && npm run build",
     "start": "cd frontend && npm start"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "axios": "^1.7.9",
+    "styled-components": "^6.1.13"
   }
 }

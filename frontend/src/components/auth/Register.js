@@ -3,11 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { FcGoogle } from 'react-icons/fc';
 import { FaGithub } from 'react-icons/fa';
+import { GiBlackBelt } from 'react-icons/gi';
 
 const Register = () => {
   const navigate = useNavigate();
   const { register, loginWithGoogle, loginWithGithub, error } = useAuth();
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -25,6 +27,18 @@ const Register = () => {
   };
 
   const validateForm = () => {
+    if (!formData.username || formData.username.length < 3) {
+      setFormError('Username must be at least 3 characters long');
+      return false;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      setFormError('Username can only contain letters, numbers, and underscores');
+      return false;
+    }
+    if (!formData.email || !/\S+@\S+\.\S+/.test(formData.email)) {
+      setFormError('Please enter a valid email address');
+      return false;
+    }
     if (formData.password !== formData.confirmPassword) {
       setFormError('Passwords do not match');
       return false;
@@ -44,7 +58,7 @@ const Register = () => {
     setFormError('');
 
     try {
-      await register(formData.email, formData.password, formData.role);
+      await register(formData.email, formData.password, formData.role, formData.username);
       navigate('/dashboard');
     } catch (err) {
       setFormError(err.message);
@@ -74,9 +88,15 @@ const Register = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          <GiBlackBelt className="h-12 w-12 text-indigo-600" />
+        </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Join HackDojo
         </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Begin your coding journey with our belt system
+        </p>
         <p className="mt-2 text-center text-sm text-gray-600">
           Already have an account?{' '}
           <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
@@ -88,12 +108,31 @@ const Register = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {(formError || error) && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
-              {formError || error}
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded relative">
+              <span className="block sm:inline">{formError || error}</span>
             </div>
           )}
 
           <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
+              </label>
+              <div className="mt-1">
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  required
+                  value={formData.username}
+                  onChange={handleChange}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Choose a unique username"
+                />
+              </div>
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
@@ -168,9 +207,9 @@ const Register = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors duration-200"
               >
-                {isLoading ? 'Creating account...' : 'Create account'}
+                {isLoading ? 'Creating account...' : 'Start Your Journey'}
               </button>
             </div>
           </form>
@@ -188,7 +227,7 @@ const Register = () => {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button
                 onClick={handleGoogleRegister}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200"
               >
                 <FcGoogle className="h-5 w-5" />
                 <span className="ml-2">Google</span>
@@ -196,7 +235,7 @@ const Register = () => {
 
               <button
                 onClick={handleGithubRegister}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200"
               >
                 <FaGithub className="h-5 w-5" />
                 <span className="ml-2">GitHub</span>

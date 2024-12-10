@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 from auth import auth_bp
 from parent import parent_bp
 from student import student_bp
-from models import db, User, Progress, Belt
+from models import db, User, Progress, Belt, FTCProgress
+from routes.ftc import ftc
 import json
 import codecs
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ import openai
 from gtts import gTTS
 import uuid
 import os
+from flask_migrate import Migrate
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -53,6 +55,7 @@ jwt = JWTManager(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hackdojo.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+migrate = Migrate(app, db)
 
 # Remove the after_request handler since CORS is handling headers
 # @app.after_request
@@ -88,6 +91,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(parent_bp, url_prefix='/api/parent')
 app.register_blueprint(student_bp, url_prefix='/api/student')
+app.register_blueprint(ftc)
 
 def admin_required(f):
     @wraps(f)
@@ -373,13 +377,26 @@ def get_lesson(day):
                 'message': f'No lesson found for day {day}'
             }), 404
 
+        # Parse completed days
+        try:
+            completed_days = json.loads(progress.completed_days) if progress.completed_days else []
+            completed_days = [int(d) for d in completed_days]  # Ensure all days are integers
+        except (json.JSONDecodeError, ValueError):
+            completed_days = []
+            progress.completed_days = '[]'
+            db.session.commit()
+
         # For day 1, always allow access
-        if day == 1:
-            is_accessible = True
-        else:
-            # Check if this lesson should be accessible
-            completed_days = json.loads(progress.completed_days)
-            is_accessible = day <= progress.current_day or (day - 1) in completed_days
+        # For other days:
+        # 1. Allow if it's the user's current day
+        # 2. Allow if the previous day is completed
+        # 3. Allow if it's already completed
+        is_accessible = (
+            day == 1 or
+            day <= progress.current_day or
+            (day - 1) in completed_days or
+            day in completed_days
+        )
 
         if not is_accessible:
             return jsonify({
@@ -388,7 +405,6 @@ def get_lesson(day):
             }), 403
 
         # Add progress information to the lesson
-        completed_days = json.loads(progress.completed_days)
         lesson['is_completed'] = day in completed_days
         lesson['current_progress'] = progress.current_day
         lesson['completed_days'] = completed_days
@@ -404,142 +420,107 @@ def get_lesson(day):
             'message': f'Error retrieving lesson: {str(e)}'
         }), 500
 
-@app.route('/api/run', methods=['POST'])
+@app.route('/api/run_code', methods=['POST'])
 @jwt_required()
 def run_code():
     try:
-        if not request.is_json:
-            return jsonify({
-                'error': True,
-                'message': 'Missing JSON in request'
-            }), 400
-
-        code = request.json.get('code')
-        day = request.json.get('day')
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        code = data.get('code', '')
+        day = data.get('day', '')
+        user_input = data.get('userInput', '')
         
         if not code or not day:
-            return jsonify({
-                'error': True,
-                'message': 'No code or day provided'
-            }), 400
+            return jsonify({'error': 'Code and day are required'}), 400
 
-        # Create a temporary Python file
-        with open('temp.py', 'w') as f:
-            f.write(code)
+        # Modify the code to inject the input
+        modified_code = f'''
+import sys
+import io
 
-        # Run the code and capture output
-        process = subprocess.Popen(['python', 'temp.py'], 
-                                stdout=subprocess.PIPE, 
-                                stderr=subprocess.PIPE,
-                                text=True)
-        output, error = process.communicate()
+# Redirect stdin to use our input
+sys.stdin = io.StringIO("""{user_input}\\n""")
 
-        # Clean up
-        if os.path.exists('temp.py'):
-            os.remove('temp.py')
+{code}
+'''
 
-        if error:
-            return jsonify({
-                'output': error,
-                'success': False
-            })
+        # Create a temporary file with the modified code
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(modified_code)
+            temp_file = f.name
 
-        # Get current user's progress
-        current_user_id = get_jwt_identity()
-        progress = Progress.query.filter_by(user_id=current_user_id).first()
-        
-        if not progress:
-            return jsonify({
-                'error': True,
-                'message': 'User progress not found'
-            }), 404
-
-        # Load curriculum to get test cases
-        with open('curriculum.json', 'r', encoding='utf-8') as f:
-            curriculum = json.load(f)
-
-        # Find the lesson and its test cases
-        lesson = None
-        for belt in curriculum['belts']:
-            for belt_lesson in belt['days']:
-                if belt_lesson['day'] == int(day):
-                    lesson = belt_lesson
-                    break
-            if lesson:
-                break
-
-        if not lesson or 'exercise' not in lesson or 'test_cases' not in lesson['exercise']:
-            return jsonify({
-                'error': True,
-                'message': 'Test cases not found for this lesson'
-            }), 404
-
-        # Check if output matches any test case
-        success = False
-        for test_case in lesson['exercise']['test_cases']:
-            expected = test_case['expected']  # Don't strip here
-            actual_output = output  # Don't strip here
-            logger.debug(f"Expected output (raw): '{expected}'")
-            logger.debug(f"Actual output (raw): '{actual_output}'")
-            logger.debug(f"Expected output (hex): {expected.encode().hex()}")
-            logger.debug(f"Actual output (hex): {actual_output.encode().hex()}")
-            logger.debug(f"Expected length: {len(expected)}")
-            logger.debug(f"Actual length: {len(actual_output)}")
-            if actual_output == expected:
-                success = True
-                break
-
-        if success:
-            # Update progress
-            completed_days = json.loads(progress.completed_days)
-            logger.debug(f"Current completed days: {completed_days}")
-            logger.debug(f"Current day: {day}")
+        try:
+            # Run the code without input (since we've injected it)
+            process = subprocess.Popen(
+                ['python', temp_file],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
             
-            if int(day) not in completed_days:
-                completed_days.append(int(day))
-                progress.completed_days = json.dumps(completed_days)
-                logger.debug(f"Updated completed days: {completed_days}")
-                
-                # Update current_day if this is the next sequential day
-                logger.debug(f"Current progress day: {progress.current_day}")
-                if int(day) == progress.current_day:
-                    progress.current_day = int(day) + 1
-                    logger.debug(f"Updated progress day to: {progress.current_day}")
-                
-                # Update belt if needed
-                current_belt = Belt.query.get(progress.current_belt_id)
-                if current_belt:
-                    logger.debug(f"Current belt: {current_belt.name}, Days required: {current_belt.days_required}, Completed days: {len(completed_days)}")
-                    if len(completed_days) >= current_belt.days_required:
-                        next_belt = Belt.query.filter(Belt.start_day > current_belt.start_day).order_by(Belt.start_day).first()
-                        if next_belt:
-                            progress.current_belt_id = next_belt.id
-                            logger.debug(f"Updated belt to: {next_belt.name}")
+            output, error = process.communicate()
+            
+            # Clean up temp file
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+            
+            if error:
+                logger.error(f"Code execution error: {error}")
+                return jsonify({'error': error}), 400
 
-                try:
+            # Get the current lesson
+            lesson = get_lesson_by_day(day)
+            if not lesson:
+                return jsonify({'error': 'Lesson not found'}), 404
+
+            # Check if output matches any test case
+            success = False
+            for test_case in lesson['exercise']['test_cases']:
+                expected = test_case['expected']
+                actual_output = output
+                logger.debug(f"Expected output (raw): '{expected}'")
+                logger.debug(f"Actual output (raw): '{actual_output}'")
+                logger.debug(f"Expected output (hex): {expected.encode().hex()}")
+                logger.debug(f"Actual output (hex): {actual_output.encode().hex()}")
+                logger.debug(f"Expected length: {len(expected)}")
+                logger.debug(f"Actual length: {len(actual_output)}")
+                if actual_output == expected:
+                    success = True
+                    break
+
+            if success:
+                # Update progress
+                current_user_id = get_jwt_identity()
+                progress = Progress.query.filter_by(user_id=current_user_id).first()
+                if not progress:
+                    return jsonify({'error': 'User progress not found'}), 404
+
+                completed_days = json.loads(progress.completed_days)
+                if day not in completed_days:
+                    completed_days.append(day)
+                    progress.completed_days = json.dumps(completed_days)
                     db.session.commit()
-                    logger.debug("Successfully committed progress update to database")
-                except Exception as e:
-                    logger.error(f"Error committing progress update: {str(e)}")
-                    db.session.rollback()
-                    return jsonify({
-                        'error': True,
-                        'message': 'Failed to update progress'
-                    }), 500
 
-            return jsonify({
-                'output': output,
-                'success': True,
-                'completed': True,
-                'next_day': progress.current_day,
-                'message': 'Great job! You can now proceed to the next lesson.'
-            })
-        else:
-            return jsonify({
-                'output': output,
-                'success': False,
-                'message': 'Your output doesn\'t match the expected output. Try again!'
-            })
+                return jsonify({
+                    'success': True,
+                    'output': output,
+                    'message': 'Great job! Moving to next lesson...',
+                    'next_day': str(int(day) + 1)
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'output': output,
+                    'message': 'Output does not match expected result. Try again!'
+                })
+
+        except Exception as e:
+            logger.error(f"Error running code: {str(e)}")
+            return jsonify({'error': f'Error running code: {str(e)}'}), 400
 
     except Exception as e:
         logger.error(f"Error in run_code: {str(e)}", exc_info=True)
@@ -548,185 +529,57 @@ def run_code():
             'message': f'Server error: {str(e)}'
         }), 500
 
+@app.route('/api/progress/init', methods=['POST'])
+@jwt_required()
+def init_progress():
+    try:
+        current_user_id = get_jwt_identity()
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
+        
+        if not progress:
+            progress = Progress(
+                user_id=current_user_id,
+                current_day=1,
+                current_belt_id=1,
+                completed_days='[]'
+            )
+            db.session.add(progress)
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Progress initialized'
+        })
+    except Exception as e:
+        logger.error(f"Error initializing progress: {str(e)}")
+        return jsonify({
+            'error': True,
+            'message': f'Error initializing progress: {str(e)}'
+        }), 500
+
 @app.route('/api/progress', methods=['GET'])
 @jwt_required()
 def get_progress():
     try:
         current_user_id = get_jwt_identity()
-        if not current_user_id:
-            logger.error("No user ID in token")
-            return jsonify({
-                'error': True,
-                'message': 'Authentication failed'
-            }), 401
-
-        # Get the current user
-        user = User.query.get(current_user_id)
-        if not user:
-            logger.error(f"User not found: {current_user_id}")
-            return jsonify({
-                'error': True,
-                'message': 'User not found'
-            }), 404
-
-        # Ensure we have belts in the database
-        belts = Belt.query.order_by(Belt.start_day).all()
-        if not belts:
-            logger.error("No belts in database, creating default belts")
-            belts = [
-                Belt(
-                    name='White Belt',
-                    color='#FFFFFF',
-                    start_day=1,
-                    days_required=10,
-                    description='Python Basics'
-                ),
-                Belt(
-                    name='Yellow Belt',
-                    color='#FFD700',
-                    start_day=11,
-                    days_required=10,
-                    description='Control Flow'
-                )
-            ]
-            for belt in belts:
-                db.session.add(belt)
-            try:
-                db.session.commit()
-            except Exception as e:
-                logger.error(f"Error creating belts: {str(e)}")
-                db.session.rollback()
-                return jsonify({
-                    'error': True,
-                    'message': 'Failed to initialize belt data'
-                }), 500
-
-        # Get or create progress
         progress = Progress.query.filter_by(user_id=current_user_id).first()
+        
         if not progress:
-            logger.info(f"Creating new progress for user {current_user_id}")
-            white_belt = Belt.query.filter_by(name='White Belt').first()
-            if not white_belt:
-                logger.error("White Belt not found")
-                return jsonify({
-                    'error': True,
-                    'message': 'Belt system not properly initialized'
-                }), 500
-
-            progress = Progress(
-                user_id=current_user_id,
-                current_day=1,
-                current_belt_id=white_belt.id,
-                completed_days=[]
-            )
-            try:
-                db.session.add(progress)
-                db.session.commit()
-            except Exception as e:
-                logger.error(f"Error creating progress: {str(e)}")
-                db.session.rollback()
-                return jsonify({
-                    'error': True,
-                    'message': 'Failed to create progress'
-                }), 500
-
-        # Get current belt data
-        current_belt = Belt.query.get(progress.current_belt_id)
-        if not current_belt:
-            logger.error(f"Current belt not found: {progress.current_belt_id}")
-            # Reset to white belt
-            white_belt = Belt.query.filter_by(name='White Belt').first()
-            if not white_belt:
-                return jsonify({
-                    'error': True,
-                    'message': 'Belt system error'
-                }), 500
-            progress.current_belt_id = white_belt.id
-            current_belt = white_belt
-            try:
-                db.session.commit()
-            except Exception as e:
-                logger.error(f"Error updating belt: {str(e)}")
-                db.session.rollback()
-                return jsonify({
-                    'error': True,
-                    'message': 'Failed to update belt'
-                }), 500
-
-        # Prepare response
-        try:
-            response_data = {
-                'completed_days': progress.completed_days if progress.completed_days else [],
-                'current_day': progress.current_day if progress.current_day else 1,
-                'current_belt': {
-                    'id': current_belt.id,
-                    'name': current_belt.name,
-                    'color': current_belt.color,
-                    'start_day': current_belt.start_day,
-                    'days_required': current_belt.days_required,
-                    'description': current_belt.description
-                },
-                'all_belts': [{
-                    'id': belt.id,
-                    'name': belt.name,
-                    'color': belt.color,
-                    'start_day': belt.start_day,
-                    'days_required': belt.days_required,
-                    'description': belt.description
-                } for belt in belts]
-            }
-            return jsonify(response_data)
-        except Exception as e:
-            logger.error(f"Error preparing response: {str(e)}")
             return jsonify({
                 'error': True,
-                'message': 'Error preparing progress data'
-            }), 500
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_progress: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': True,
-            'message': 'Internal server error'
-        }), 500
-
-@app.route('/api/progress/init', methods=['POST'])
-@jwt_required()
-def initialize_progress():
-    try:
-        current_user_id = get_jwt_identity()
-        logger.info(f"Initializing progress for user {current_user_id}")
-        
-        # Check if progress already exists
-        existing_progress = Progress.query.filter_by(user_id=current_user_id).first()
-        logger.info(f"Existing progress: {existing_progress}")
-        
-        if existing_progress:
-            progress_dict = existing_progress.to_dict()
-            logger.info(f"Returning existing progress: {progress_dict}")
-            return jsonify(progress_dict), 200
+                'message': 'No progress found'
+            }), 404
             
-        # Create new progress
-        logger.info("Creating new progress")
-        new_progress = Progress(
-            user_id=current_user_id,
-            current_day=1,
-            current_belt_id=1,  # Start with white belt
-            completed_days=[]
-        )
-        
-        db.session.add(new_progress)
-        db.session.commit()
-        
-        progress_dict = new_progress.to_dict()
-        logger.info(f"Created new progress: {progress_dict}")
-        return jsonify(progress_dict), 201
-        
+        return jsonify({
+            'current_day': progress.current_day,
+            'current_belt_id': progress.current_belt_id,
+            'completed_days': json.loads(progress.completed_days)
+        })
     except Exception as e:
-        logger.error(f"Error initializing progress: {str(e)}", exc_info=True)
+        logger.error(f"Error getting progress: {str(e)}")
         return jsonify({
             'error': True,
-            'message': f'Error initializing progress: {str(e)}'
+            'message': f'Error getting progress: {str(e)}'
         }), 500
 
 @app.route('/api/parent/children', methods=['GET'])
@@ -833,6 +686,91 @@ def get_child_activity(child_id):
             "success": activity.success
         } for activity in recent_activity]
     })
+
+@app.route('/api/progress/update', methods=['POST'])
+@jwt_required()
+def update_progress():
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        if not data or 'completed_day' not in data:
+            return jsonify({
+                'error': True,
+                'message': 'Missing completed_day in request'
+            }), 400
+
+        completed_day = int(data['completed_day'])
+        
+        # Get or create progress
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
+        if not progress:
+            progress = Progress(
+                user_id=current_user_id,
+                current_day=1,
+                current_belt_id=1,
+                completed_days='[]'
+            )
+            db.session.add(progress)
+            db.session.commit()
+
+        # Update completed days
+        try:
+            completed_days = json.loads(progress.completed_days) if progress.completed_days else []
+            completed_days = [int(d) for d in completed_days]  # Ensure all days are integers
+        except (json.JSONDecodeError, ValueError):
+            completed_days = []
+
+        if completed_day not in completed_days:
+            completed_days.append(completed_day)
+            completed_days.sort()
+            progress.completed_days = json.dumps(completed_days)
+            
+            # Update current day to the next day if this was the current day
+            if completed_day >= progress.current_day:
+                progress.current_day = completed_day + 1
+
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error saving progress: {str(e)}")
+                return jsonify({
+                    'error': True,
+                    'message': 'Failed to save progress'
+                }), 500
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully completed day {completed_day}',
+            'current_day': progress.current_day,
+            'completed_days': completed_days
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating progress: {str(e)}")
+        return jsonify({
+            'error': True,
+            'message': str(e)
+        }), 500
+
+def get_lesson_by_day(day):
+    """Get lesson details from curriculum.json by day number."""
+    try:
+        # Load curriculum
+        with open('curriculum.json', 'r', encoding='utf-8') as f:
+            curriculum = json.load(f)
+
+        # Find the lesson for the given day
+        day = int(day)
+        for belt in curriculum['belts']:
+            for belt_lesson in belt['days']:
+                if belt_lesson['day'] == day:
+                    return belt_lesson
+        return None
+    except Exception as e:
+        logger.error(f"Error getting lesson: {str(e)}")
+        return None
 
 def text_to_speech(text):
     """Convert text to speech using Google Text-to-Speech"""

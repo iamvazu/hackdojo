@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { FaLock, FaCheckCircle, FaCircle } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { FaLock, FaCheck, FaChevronRight, FaChevronDown } from 'react-icons/fa';
 import LessonView from './LessonView';
+import { fetchWithAuth } from '../utils/api';
 
 const Container = styled.div`
   display: flex;
@@ -134,6 +136,112 @@ const Message = styled.div`
   max-width: 80%;
 `;
 
+const BeltContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: #1e1e1e;
+  border-radius: 8px;
+`;
+
+const BeltSection = styled.div`
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  background: ${props => props.isActive ? '#2d2d2d' : '#262626'};
+`;
+
+const BeltHeader = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  cursor: pointer;
+  gap: 15px;
+  border-bottom: ${props => props.isExpanded ? '1px solid #333' : 'none'};
+
+  &:hover {
+    background: #2d2d2d;
+  }
+`;
+
+const BeltIcon = styled.div`
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: ${props => props.color};
+  border: 2px solid ${props => props.isActive ? '#4CAF50' : '#333'};
+  box-shadow: ${props => props.isActive ? '0 0 10px rgba(76, 175, 80, 0.3)' : 'none'};
+`;
+
+const BeltInfo = styled.div`
+  flex: 1;
+`;
+
+const BeltName = styled.h3`
+  margin: 0;
+  color: #fff;
+  font-size: 1.1em;
+`;
+
+const BeltDescription = styled.p`
+  margin: 5px 0 0;
+  color: #888;
+  font-size: 0.9em;
+`;
+
+const DaysGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  padding: 15px;
+  background: #1e1e1e;
+`;
+
+const DayButtonLink = styled(Link)`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: ${props => props.completed ? '#45a049' : props.active ? '#4CAF50' : '#333'};
+  border-radius: 6px;
+  text-decoration: none;
+  color: white;
+  gap: 8px;
+  cursor: ${props => props.locked ? 'not-allowed' : 'pointer'};
+  opacity: ${props => props.locked ? 0.5 : 1};
+  pointer-events: ${props => props.locked ? 'none' : 'auto'};
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: ${props => props.locked ? 'none' : 'translateY(-2px)'};
+    background: ${props => props.locked ? '#333' : '#4CAF50'};
+  }
+`;
+
+const DayNumber = styled.span`
+  font-weight: bold;
+`;
+
+const StatusIcon = styled.div`
+  font-size: 1.1em;
+`;
+
+const ProgressBar = styled.div`
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  margin-top: 5px;
+  overflow: hidden;
+
+  div {
+    height: 100%;
+    background: #4CAF50;
+    width: ${props => props.progress}%;
+    transition: width 0.3s ease;
+  }
+`;
+
 const BeltSystem = () => {
   const [selectedBelt, setSelectedBelt] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -145,32 +253,54 @@ const BeltSystem = () => {
   });
   const [chatMessages, setChatMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
+  const [expandedBelt, setExpandedBelt] = useState(null);
+
+  // Define default belts
+  const BELTS = [
+    {
+      name: 'White Belt',
+      color: '#FFFFFF',
+      startDay: 1,
+      days: 10,
+      description: 'Begin your Python journey'
+    },
+    {
+      name: 'Yellow Belt',
+      color: '#FFD700',
+      startDay: 11,
+      days: 10,
+      description: 'Control flow and functions'
+    },
+    {
+      name: 'Orange Belt',
+      color: '#FFA500',
+      startDay: 21,
+      days: 10,
+      description: 'Data structures and algorithms'
+    }
+  ];
 
   useEffect(() => {
-    // Fetch curriculum data
-    fetch('http://localhost:5000/api/curriculum')
-      .then(res => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
+    const fetchData = async () => {
+      try {
+        // Fetch user progress
+        const progressData = await fetchWithAuth('/api/progress');
+        if (progressData) {
+          setUserProgress({
+            currentBelt: progressData.current_belt?.name || 'White Belt',
+            currentDay: progressData.current_day || 1,
+            completedDays: progressData.completed_days || []
+          });
         }
-        return res.json();
-      })
-      .then(data => {
-        setBelts(data.belts);
-        setSelectedBelt('white');
-      })
-      .catch(err => console.error('Error fetching curriculum:', err));
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        if (err.message.includes('Authentication failed')) {
+          window.location.href = '/login';
+        }
+      }
+    };
 
-    // Fetch user progress
-    fetch('http://localhost:5000/api/progress')
-      .then(res => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(data => setUserProgress(data))
-      .catch(err => console.error('Error fetching progress:', err));
+    fetchData();
   }, []);
 
   const handleDayClick = (day) => {
@@ -180,48 +310,45 @@ const BeltSystem = () => {
   };
 
   const handleProgressUpdate = (progressData) => {
-    setUserProgress(progressData);
+    if (!progressData) return;
+    
+    setUserProgress({
+      currentBelt: progressData.current_belt?.name || 'White Belt',
+      currentDay: progressData.current_day || 1,
+      completedDays: progressData.completed_days || []
+    });
     
     // Update selected belt if necessary
-    if (progressData.currentBelt !== selectedBelt) {
-      setSelectedBelt(progressData.currentBelt);
+    if (progressData.current_belt?.name && progressData.current_belt.name !== selectedBelt) {
+      setSelectedBelt(progressData.current_belt.name);
     }
   };
 
   const isDayUnlocked = (day) => {
-    return day <= userProgress.currentDay;
+    return day <= (userProgress?.currentDay || 1);
   };
 
   const isDayCompleted = (day) => {
-    return userProgress.completedDays.includes(day);
+    return userProgress?.completedDays?.includes(day) || false;
   };
 
-  const renderDays = () => {
-    const selectedBeltData = belts.find(belt => belt.name === selectedBelt);
-    if (!selectedBeltData) return null;
-
-    const days = [];
-    for (let day = selectedBeltData.startDay; day <= selectedBeltData.endDay; day++) {
-      const isUnlocked = isDayUnlocked(day);
-      const isCompleted = isDayCompleted(day);
-      
-      days.push(
-        <DayButton
-          key={day}
-          onClick={() => handleDayClick(day)}
-          disabled={!isUnlocked}
-          completed={isCompleted}
-        >
-          Day {day}
-          {isCompleted && <span role="img" aria-label="completed">✅</span>}
-          {!isUnlocked && <span role="img" aria-label="locked">🔒</span>}
-        </DayButton>
-      );
-    }
-    return days;
+  const getBeltProgress = (belt) => {
+    if (!userProgress?.completedDays) return 0;
+    if (!belt?.days || !belt?.startDay) return 0;
+    
+    const beltDays = Array.from({ length: belt.days }, (_, i) => belt.startDay + i);
+    const completedInBelt = beltDays.filter(day => userProgress.completedDays.includes(day));
+    return (completedInBelt.length / belt.days) * 100;
   };
 
-  const handleSendMessage = () => {
+  const isDayLocked = (day) => {
+    if (!userProgress?.completedDays) return true;
+    if (day === 1) return false;
+    if (day <= (userProgress?.currentDay || 1)) return false;
+    return !userProgress.completedDays.includes(day - 1);
+  };
+
+  const handleSendMessage = async () => {
     if (inputMessage.trim()) {
       const newMessage = {
         text: inputMessage,
@@ -231,40 +358,22 @@ const BeltSystem = () => {
       setChatMessages([...chatMessages, newMessage]);
       setInputMessage('');
 
-      // Send message to backend
-      fetch('http://localhost:5000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          currentBelt: userProgress.currentBelt,
-          currentDay: userProgress.currentDay
-        })
-      })
-        .then(res => {
-          if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-          }
-          return res.json();
-        })
-        .then(data => {
-          const senseiResponse = {
-            text: data.response,
-            sender: 'sensei',
-            timestamp: new Date().toISOString()
-          };
-          setChatMessages(messages => [...messages, senseiResponse]);
-        })
-        .catch(err => console.error('Error sending message:', err));
+      try {
+        // Send message to backend using fetchWithAuth
+        await fetchWithAuth('/api/chat', {
+          method: 'POST',
+          body: { message: inputMessage }
+        });
+      } catch (err) {
+        console.error('Error sending message:', err);
+      }
     }
   };
 
   return (
     <Container>
       <BeltList>
-        {belts.map((belt) => (
+        {BELTS.map((belt, index) => (
           <BeltButton
             key={belt.name}
             selected={selectedBelt === belt.name}
@@ -277,9 +386,55 @@ const BeltSystem = () => {
       </BeltList>
       
       <DaysList>
-        <DayGrid>
-          {renderDays()}
-        </DayGrid>
+        {BELTS.map((belt, index) => {
+          const isCurrentBelt = selectedBelt === belt.name;
+          const progress = getBeltProgress(belt);
+          
+          return (
+            <BeltSection key={belt.name} isActive={isCurrentBelt}>
+              <BeltHeader 
+                onClick={() => setExpandedBelt(expandedBelt === index ? null : index)}
+                isExpanded={expandedBelt === index}
+              >
+                <BeltIcon color={belt.color} isActive={isCurrentBelt} />
+                <BeltInfo>
+                  <BeltName>{belt.name}</BeltName>
+                  <BeltDescription>{belt.description}</BeltDescription>
+                  <ProgressBar progress={progress}>
+                    <div />
+                  </ProgressBar>
+                </BeltInfo>
+                {expandedBelt === index ? <FaChevronDown /> : <FaChevronRight />}
+              </BeltHeader>
+              
+              {expandedBelt === index && (
+                <DaysGrid>
+                  {Array.from({ length: belt.days || 0 }, (_, i) => {
+                    const day = (belt.startDay || 0) + i;
+                    const isCompleted = isDayCompleted(day);
+                    const isActive = day === userProgress?.currentDay;
+                    const isLocked = isDayLocked(day);
+                    
+                    return (
+                      <DayButtonLink
+                        key={day}
+                        to={isLocked ? '#' : `/student/lesson/${day}`}
+                        completed={isCompleted}
+                        active={isActive}
+                        locked={isLocked}
+                      >
+                        <DayNumber>Day {day}</DayNumber>
+                        <StatusIcon>
+                          {isLocked ? <FaLock /> : isCompleted ? <FaCheck /> : '▶'}
+                        </StatusIcon>
+                      </DayButtonLink>
+                    );
+                  })}
+                </DaysGrid>
+              )}
+            </BeltSection>
+          );
+        })}
       </DaysList>
 
       {selectedDay && (
