@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, current_app
+from flask import Flask, jsonify, request, current_app, make_response, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, get_jwt, create_access_token
 from functools import wraps
@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from auth import auth_bp
 from parent import parent_bp
 from student import student_bp
-from models import db, User
+from models import db, User, Progress, Belt
 import json
 import codecs
 from datetime import datetime, timedelta
@@ -18,6 +18,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
 import sqlite3
 from dateutil import tz
+import openai
+from gtts import gTTS
+import uuid
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -25,120 +29,65 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"],
-        "supports_credentials": True
-    }
-})
 
-# Ensure CORS headers are added to all responses
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Max-Age', '86400')
-    return response
+# Configure CORS
+CORS(app, 
+    resources={
+        r"/api/*": {
+            "origins": "http://localhost:3000",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    },
+    supports_credentials=True
+)
+
+# Configure JWT
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')  # Change this in production
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+jwt = JWTManager(app)
+
+# Configure SQLAlchemy
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hackdojo.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Remove the after_request handler since CORS is handling headers
+# @app.after_request
+# def after_request(response):
+#     origin = request.headers.get('Origin', 'http://localhost:3000')
+#     if origin == 'http://localhost:3000':
+#         response.headers.add('Access-Control-Allow-Origin', origin)
+#         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+#         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+#         response.headers.add('Access-Control-Allow-Credentials', 'true')
+#     return response
+
+# Handle OPTIONS requests
+@app.route('/api/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    return '', 200
 
 # Load environment variables
 load_dotenv()
 
-# Configure JWT
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-jwt = JWTManager(app)
+# Configure OpenAI
+openai.api_key = os.environ.get('OPENAI_API_KEY')
+if not openai.api_key:
+    logger.warning("OpenAI API key not found in environment variables!")
 
-@jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_payload):
-    return jsonify({
-        'error': True,
-        'message': 'Token has expired'
-    }), 401
-
-@jwt.invalid_token_loader
-def invalid_token_callback(error):
-    return jsonify({
-        'error': True,
-        'message': 'Invalid token'
-    }), 401
-
-@jwt.unauthorized_loader
-def missing_token_callback(error):
-    return jsonify({
-        'error': True,
-        'message': 'Missing token'
-    }), 401
-
-def get_db():
-    if not hasattr(get_db, 'db'):
-        db_path = os.path.join(os.path.dirname(__file__), 'hackdojo.db')
-        get_db.db = sqlite3.connect(db_path)
-        get_db.db.row_factory = sqlite3.Row
-    return get_db.db
-
-def init_db():
-    """Initialize the database."""
-    try:
-        db_path = os.path.join(os.path.dirname(__file__), 'hackdojo.db')
-        # Remove existing database if it exists
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            
-        db = sqlite3.connect(db_path)
-        
-        # Read schema.sql
-        with open(os.path.join(os.path.dirname(__file__), 'schema.sql'), 'r') as f:
-            db.executescript(f.read())
-            
-        # Create test user if it doesn't exist
-        cursor = db.cursor()
-        cursor.execute('SELECT id FROM users WHERE username = ?', ('test',))
-        if not cursor.fetchone():
-            # Create a test user with password 'test'
-            cursor.execute(
-                'INSERT INTO users (username, password_hash, email, role) VALUES (?, ?, ?, ?)',
-                ('test', generate_password_hash('test'), 'test@example.com', 'student')
-            )
-            
-            # Initialize progress for test user
-            cursor.execute('SELECT last_insert_rowid()')
-            user_id = cursor.fetchone()[0]
-            cursor.execute(
-                'INSERT INTO user_progress (user_id, current_belt_id, current_day, completed_days) VALUES (?, ?, ?, ?)',
-                (user_id, 1, 1, '[]')
-            )
-            
-        db.commit()
-        db.close()
-        logger.info('Database initialized successfully')
-    except Exception as e:
-        logger.error(f'Error initializing database: {str(e)}', exc_info=True)
-        raise
-
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hackdojo.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+# Configure upload folder for audio files
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio_files')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(parent_bp, url_prefix='/api/parent')
 app.register_blueprint(student_bp, url_prefix='/api/student')
-
-# CORS configuration
-# CORS(app, 
-#      resources={
-#          r"/api/*": {
-#              "origins": ["http://localhost:3000", "http://localhost:3001"],
-#              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-#              "allow_headers": ["Content-Type", "Authorization", "Accept"],
-#              "supports_credentials": True
-#          }
-#      })
 
 def admin_required(f):
     @wraps(f)
@@ -340,103 +289,119 @@ def admin_get_analytics():
 @jwt_required()
 def get_curriculum():
     try:
+        # Load the curriculum
+        with open('curriculum.json', 'r', encoding='utf-8') as f:
+            curriculum = json.load(f)
+
+        # Get user's progress
         current_user_id = get_jwt_identity()
-        logger.info(f"Fetching curriculum for user: {current_user_id}")
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
         
-        if not current_user_id:
-            logger.error("No user ID found in JWT token")
+        if not progress:
             return jsonify({
                 'error': True,
-                'message': 'Authentication failed - invalid token'
-            }), 401
+                'message': 'User progress not found'
+            }), 404
 
-        # Verify token is not expired
-        jwt_data = get_jwt()
-        if jwt_data and jwt_data.get('exp', 0) < datetime.now(timezone.utc).timestamp():
-            logger.error("Token has expired")
-            return jsonify({
-                'error': True, 
-                'message': 'Authentication failed - token expired'
-            }), 401
+        # Add progress information to each lesson
+        completed_days = json.loads(progress.completed_days)
+        for belt in curriculum['belts']:
+            for lesson in belt['days']:
+                lesson['is_completed'] = lesson['day'] in completed_days
+                lesson['is_accessible'] = lesson['day'] <= progress.current_day or lesson['day'] - 1 in completed_days
 
-        curriculum = load_curriculum()
-        if not curriculum:
-            logger.error("Failed to load curriculum data")
-            return jsonify({
-                'error': True,
-                'message': 'Failed to load curriculum data'
-            }), 500
-
-        if 'belts' not in curriculum:
-            logger.error("Invalid curriculum format - missing belts")
-            return jsonify({
-                'error': True,
-                'message': 'Invalid curriculum format'
-            }), 500
-
-        logger.info("Successfully fetched curriculum")
         return jsonify(curriculum)
 
     except Exception as e:
-        logger.error(f"Error in get_curriculum: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving curriculum: {str(e)}")
         return jsonify({
             'error': True,
-            'message': f'Server error: {str(e)}'
+            'message': f'Error retrieving curriculum: {str(e)}'
         }), 500
 
 @app.route('/api/lesson/<int:day>', methods=['GET'])
 @jwt_required()
 def get_lesson(day):
     try:
-        logger.debug(f"Fetching lesson for day {day}")
-        curriculum = load_curriculum()
+        current_user_id = get_jwt_identity()
         
-        logger.debug(f"Curriculum loaded: {bool(curriculum)}")
-        logger.debug(f"Belts in curriculum: {len(curriculum.get('belts', []))}")
+        # Get user's progress
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
+        if not progress:
+            # Create initial progress if it doesn't exist
+            progress = Progress(
+                user_id=current_user_id,
+                current_day=1,
+                current_belt_id=1,
+                completed_days='[]'
+            )
+            db.session.add(progress)
+            db.session.commit()
         
-        if not curriculum or 'belts' not in curriculum:
-            logger.error("Invalid curriculum format")
+        # Load the curriculum
+        try:
+            with open('curriculum.json', 'r', encoding='utf-8') as f:
+                curriculum = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading curriculum: {str(e)}")
             return jsonify({
                 'error': True,
-                'message': 'Invalid curriculum format'
+                'message': 'Error loading curriculum'
             }), 500
-            
-        # Find the belt containing this day
+
+        # Find the lesson and belt for the requested day
+        lesson = None
+        current_belt = None
         for belt in curriculum['belts']:
-            logger.debug(f"Checking belt {belt.get('name')}: days {belt.get('startDay')} to {belt.get('endDay')}")
-            if belt['startDay'] <= day <= belt['endDay']:
-                # Find the specific day's lesson
-                for lesson in belt.get('days', []):
-                    if lesson['day'] == day:
-                        logger.info(f"Found lesson for day {day}")
-                        return jsonify(lesson)
-                
-                logger.warning(f"No specific lesson found for day {day} in matching belt")
-                # If day not found in belt, return empty lesson template
-                return jsonify({
-                    'day': day,
-                    'title': f'Day {day}',
-                    'content': 'Lesson content coming soon!',
-                    'exercise': {
-                        'title': 'Practice Exercise',
-                        'description': 'Stay tuned for today\'s exercise!',
-                        'starterCode': '# Your code here\n',
-                        'hint': 'Check back later for hints',
-                        'test_cases': []
+            for belt_lesson in belt['days']:
+                if belt_lesson['day'] == day:
+                    lesson = belt_lesson
+                    current_belt = {
+                        'name': belt['name'],
+                        'color': belt['color'],
+                        'startDay': belt['startDay'],
+                        'endDay': belt['endDay'],
+                        'description': belt['description']
                     }
-                })
-        
-        logger.warning(f"Day {day} not found in any belt")
-        return jsonify({
-            'error': True,
-            'message': f'Day {day} not found in curriculum'
-        }), 404
-        
+                    break
+            if lesson:
+                break
+
+        if not lesson:
+            return jsonify({
+                'error': True,
+                'message': f'No lesson found for day {day}'
+            }), 404
+
+        # For day 1, always allow access
+        if day == 1:
+            is_accessible = True
+        else:
+            # Check if this lesson should be accessible
+            completed_days = json.loads(progress.completed_days)
+            is_accessible = day <= progress.current_day or (day - 1) in completed_days
+
+        if not is_accessible:
+            return jsonify({
+                'error': True,
+                'message': 'Previous lessons must be completed first'
+            }), 403
+
+        # Add progress information to the lesson
+        completed_days = json.loads(progress.completed_days)
+        lesson['is_completed'] = day in completed_days
+        lesson['current_progress'] = progress.current_day
+        lesson['completed_days'] = completed_days
+        lesson['belt'] = current_belt
+        lesson['next_day'] = day + 1 if day < 60 else None
+
+        return jsonify(lesson)
+
     except Exception as e:
-        logger.error(f"Error in get_lesson: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving lesson: {str(e)}")
         return jsonify({
             'error': True,
-            'message': str(e)
+            'message': f'Error retrieving lesson: {str(e)}'
         }), 500
 
 @app.route('/api/run', methods=['POST'])
@@ -450,66 +415,134 @@ def run_code():
             }), 400
 
         code = request.json.get('code')
-        if not code:
+        day = request.json.get('day')
+        
+        if not code or not day:
             return jsonify({
                 'error': True,
-                'message': 'No code provided'
+                'message': 'No code or day provided'
             }), 400
 
-        logger.debug(f"Running code: {code}")
-        
-        # Create a temporary file to run the code
-        temp_file = None
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(code)
-                temp_file = f.name
-                logger.debug(f"Created temporary file: {temp_file}")
-            
-            # Run the code and capture output
-            logger.debug("Executing code...")
-            result = subprocess.run(
-                ['python', temp_file], 
-                capture_output=True,
-                text=True,
-                timeout=5  # 5 second timeout
-            )
-            
-            logger.debug(f"Code execution completed. Return code: {result.returncode}")
-            logger.debug(f"Stdout: {result.stdout}")
-            logger.debug(f"Stderr: {result.stderr}")
-            
+        # Create a temporary Python file
+        with open('temp.py', 'w') as f:
+            f.write(code)
+
+        # Run the code and capture output
+        process = subprocess.Popen(['python', 'temp.py'], 
+                                stdout=subprocess.PIPE, 
+                                stderr=subprocess.PIPE,
+                                text=True)
+        output, error = process.communicate()
+
+        # Clean up
+        if os.path.exists('temp.py'):
+            os.remove('temp.py')
+
+        if error:
             return jsonify({
-                'output': result.stdout,
-                'error': result.stderr,
-                'success': result.returncode == 0
+                'output': error,
+                'success': False
             })
-            
-        except subprocess.TimeoutExpired:
-            logger.warning("Code execution timed out")
+
+        # Get current user's progress
+        current_user_id = get_jwt_identity()
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
+        
+        if not progress:
             return jsonify({
                 'error': True,
-                'message': 'Code execution timed out (5 second limit)'
-            }), 408
-            
-        except Exception as e:
-            logger.error(f"Error executing code: {str(e)}", exc_info=True)
+                'message': 'User progress not found'
+            }), 404
+
+        # Load curriculum to get test cases
+        with open('curriculum.json', 'r', encoding='utf-8') as f:
+            curriculum = json.load(f)
+
+        # Find the lesson and its test cases
+        lesson = None
+        for belt in curriculum['belts']:
+            for belt_lesson in belt['days']:
+                if belt_lesson['day'] == int(day):
+                    lesson = belt_lesson
+                    break
+            if lesson:
+                break
+
+        if not lesson or 'exercise' not in lesson or 'test_cases' not in lesson['exercise']:
             return jsonify({
                 'error': True,
-                'message': f'Error executing code: {str(e)}'
-            }), 500
+                'message': 'Test cases not found for this lesson'
+            }), 404
+
+        # Check if output matches any test case
+        success = False
+        for test_case in lesson['exercise']['test_cases']:
+            expected = test_case['expected']  # Don't strip here
+            actual_output = output  # Don't strip here
+            logger.debug(f"Expected output (raw): '{expected}'")
+            logger.debug(f"Actual output (raw): '{actual_output}'")
+            logger.debug(f"Expected output (hex): {expected.encode().hex()}")
+            logger.debug(f"Actual output (hex): {actual_output.encode().hex()}")
+            logger.debug(f"Expected length: {len(expected)}")
+            logger.debug(f"Actual length: {len(actual_output)}")
+            if actual_output == expected:
+                success = True
+                break
+
+        if success:
+            # Update progress
+            completed_days = json.loads(progress.completed_days)
+            logger.debug(f"Current completed days: {completed_days}")
+            logger.debug(f"Current day: {day}")
             
-        finally:
-            # Clean up temporary file
-            if temp_file:
+            if int(day) not in completed_days:
+                completed_days.append(int(day))
+                progress.completed_days = json.dumps(completed_days)
+                logger.debug(f"Updated completed days: {completed_days}")
+                
+                # Update current_day if this is the next sequential day
+                logger.debug(f"Current progress day: {progress.current_day}")
+                if int(day) == progress.current_day:
+                    progress.current_day = int(day) + 1
+                    logger.debug(f"Updated progress day to: {progress.current_day}")
+                
+                # Update belt if needed
+                current_belt = Belt.query.get(progress.current_belt_id)
+                if current_belt:
+                    logger.debug(f"Current belt: {current_belt.name}, Days required: {current_belt.days_required}, Completed days: {len(completed_days)}")
+                    if len(completed_days) >= current_belt.days_required:
+                        next_belt = Belt.query.filter(Belt.start_day > current_belt.start_day).order_by(Belt.start_day).first()
+                        if next_belt:
+                            progress.current_belt_id = next_belt.id
+                            logger.debug(f"Updated belt to: {next_belt.name}")
+
                 try:
-                    os.unlink(temp_file)
-                    logger.debug(f"Cleaned up temporary file: {temp_file}")
+                    db.session.commit()
+                    logger.debug("Successfully committed progress update to database")
                 except Exception as e:
-                    logger.error(f"Error cleaning up temporary file: {str(e)}")
-            
+                    logger.error(f"Error committing progress update: {str(e)}")
+                    db.session.rollback()
+                    return jsonify({
+                        'error': True,
+                        'message': 'Failed to update progress'
+                    }), 500
+
+            return jsonify({
+                'output': output,
+                'success': True,
+                'completed': True,
+                'next_day': progress.current_day,
+                'message': 'Great job! You can now proceed to the next lesson.'
+            })
+        else:
+            return jsonify({
+                'output': output,
+                'success': False,
+                'message': 'Your output doesn\'t match the expected output. Try again!'
+            })
+
     except Exception as e:
-        logger.error(f"Unexpected error in run_code: {str(e)}", exc_info=True)
+        logger.error(f"Error in run_code: {str(e)}", exc_info=True)
         return jsonify({
             'error': True,
             'message': f'Server error: {str(e)}'
@@ -518,220 +551,184 @@ def run_code():
 @app.route('/api/progress', methods=['GET'])
 @jwt_required()
 def get_progress():
-    db = None
     try:
         current_user_id = get_jwt_identity()
-        logger.info(f"Fetching progress for user: {current_user_id}")
-        
         if not current_user_id:
-            logger.error("No user ID found in JWT token")
+            logger.error("No user ID in token")
             return jsonify({
                 'error': True,
-                'message': 'Authentication failed: No user ID found'
+                'message': 'Authentication failed'
             }), 401
 
-        db = get_db()
-        cursor = db.cursor()
-        
-        # First check if user exists
-        cursor.execute('SELECT id FROM users WHERE id = ?', (current_user_id,))
-        user = cursor.fetchone()
+        # Get the current user
+        user = User.query.get(current_user_id)
         if not user:
             logger.error(f"User not found: {current_user_id}")
             return jsonify({
                 'error': True,
                 'message': 'User not found'
             }), 404
-        
-        # Check if user has progress record
-        cursor.execute('SELECT * FROM user_progress WHERE user_id = ?', (current_user_id,))
-        progress = cursor.fetchone()
+
+        # Ensure we have belts in the database
+        belts = Belt.query.order_by(Belt.start_day).all()
+        if not belts:
+            logger.error("No belts in database, creating default belts")
+            belts = [
+                Belt(
+                    name='White Belt',
+                    color='#FFFFFF',
+                    start_day=1,
+                    days_required=10,
+                    description='Python Basics'
+                ),
+                Belt(
+                    name='Yellow Belt',
+                    color='#FFD700',
+                    start_day=11,
+                    days_required=10,
+                    description='Control Flow'
+                )
+            ]
+            for belt in belts:
+                db.session.add(belt)
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Error creating belts: {str(e)}")
+                db.session.rollback()
+                return jsonify({
+                    'error': True,
+                    'message': 'Failed to initialize belt data'
+                }), 500
+
+        # Get or create progress
+        progress = Progress.query.filter_by(user_id=current_user_id).first()
         if not progress:
-            logger.info(f"No progress found for user {current_user_id}, creating initial progress")
-            # Initialize progress for new user
-            cursor.execute('''
-                INSERT INTO user_progress (user_id, current_day, completed_days, current_belt_id)
-                VALUES (?, 1, '[]', 1)
-            ''', (current_user_id,))
-            db.commit()
-        
-        # Get user's progress and current belt info
-        cursor.execute('''
-            SELECT up.completed_days, up.current_day, b.* 
-            FROM user_progress up
-            LEFT JOIN belts b ON up.current_belt_id = b.id
-            WHERE up.user_id = ?
-        ''', (current_user_id,))
-        
-        result = cursor.fetchone()
-        if not result:
-            logger.error(f"Failed to fetch progress after initialization for user {current_user_id}")
+            logger.info(f"Creating new progress for user {current_user_id}")
+            white_belt = Belt.query.filter_by(name='White Belt').first()
+            if not white_belt:
+                logger.error("White Belt not found")
+                return jsonify({
+                    'error': True,
+                    'message': 'Belt system not properly initialized'
+                }), 500
+
+            progress = Progress(
+                user_id=current_user_id,
+                current_day=1,
+                current_belt_id=white_belt.id,
+                completed_days=[]
+            )
+            try:
+                db.session.add(progress)
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Error creating progress: {str(e)}")
+                db.session.rollback()
+                return jsonify({
+                    'error': True,
+                    'message': 'Failed to create progress'
+                }), 500
+
+        # Get current belt data
+        current_belt = Belt.query.get(progress.current_belt_id)
+        if not current_belt:
+            logger.error(f"Current belt not found: {progress.current_belt_id}")
+            # Reset to white belt
+            white_belt = Belt.query.filter_by(name='White Belt').first()
+            if not white_belt:
+                return jsonify({
+                    'error': True,
+                    'message': 'Belt system error'
+                }), 500
+            progress.current_belt_id = white_belt.id
+            current_belt = white_belt
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Error updating belt: {str(e)}")
+                db.session.rollback()
+                return jsonify({
+                    'error': True,
+                    'message': 'Failed to update belt'
+                }), 500
+
+        # Prepare response
+        try:
+            response_data = {
+                'completed_days': progress.completed_days if progress.completed_days else [],
+                'current_day': progress.current_day if progress.current_day else 1,
+                'current_belt': {
+                    'id': current_belt.id,
+                    'name': current_belt.name,
+                    'color': current_belt.color,
+                    'start_day': current_belt.start_day,
+                    'days_required': current_belt.days_required,
+                    'description': current_belt.description
+                },
+                'all_belts': [{
+                    'id': belt.id,
+                    'name': belt.name,
+                    'color': belt.color,
+                    'start_day': belt.start_day,
+                    'days_required': belt.days_required,
+                    'description': belt.description
+                } for belt in belts]
+            }
+            return jsonify(response_data)
+        except Exception as e:
+            logger.error(f"Error preparing response: {str(e)}")
             return jsonify({
                 'error': True,
-                'message': 'Failed to fetch user progress'
+                'message': 'Error preparing progress data'
             }), 500
-        
-        # Get all belts for progress display
-        cursor.execute('SELECT * FROM belts ORDER BY start_day')
-        belts = [{
-            'id': row[0],
-            'name': row[1],
-            'color': row[2],
-            'start_day': row[3],
-            'days_required': row[4],
-            'description': row[5]
-        } for row in cursor.fetchall()]
-        
-        completed_days = json.loads(result[0]) if result[0] else []
-        current_day = result[1] or 1
-        belt_info = {
-            'id': result[2],
-            'name': result[3],
-            'color': result[4],
-            'start_day': result[5],
-            'days_required': result[6],
-            'description': result[7]
-        }
-        
-        response_data = {
-            'completed_days': completed_days,
-            'current_day': current_day,
-            'current_belt': belt_info,
-            'all_belts': belts
-        }
-        
-        logger.info(f"Successfully fetched progress for user {current_user_id}")
-        return jsonify(response_data)
 
-    except sqlite3.Error as e:
-        logger.error(f"Database error in get_progress: {str(e)}", exc_info=True)
-        if db:
-            db.rollback()
-        return jsonify({
-            'error': True,
-            'message': 'Database error occurred'
-        }), 500
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error in get_progress: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': True,
-            'message': 'Invalid progress data format'
-        }), 500
     except Exception as e:
         logger.error(f"Unexpected error in get_progress: {str(e)}", exc_info=True)
-        if db:
-            db.rollback()
         return jsonify({
             'error': True,
-            'message': f'Server error: {str(e)}'
+            'message': 'Internal server error'
         }), 500
-    finally:
-        if db:
-            db.close()
 
-@app.route('/api/progress/update', methods=['POST'])
+@app.route('/api/progress/init', methods=['POST'])
 @jwt_required()
-def update_progress():
+def initialize_progress():
     try:
         current_user_id = get_jwt_identity()
-        data = request.get_json()
+        logger.info(f"Initializing progress for user {current_user_id}")
         
-        if not data or 'day' not in data:
-            return jsonify({'error': 'Day number is required'}), 400
+        # Check if progress already exists
+        existing_progress = Progress.query.filter_by(user_id=current_user_id).first()
+        logger.info(f"Existing progress: {existing_progress}")
+        
+        if existing_progress:
+            progress_dict = existing_progress.to_dict()
+            logger.info(f"Returning existing progress: {progress_dict}")
+            return jsonify(progress_dict), 200
             
-        day = data['day']
-        success = data.get('success', True)
+        # Create new progress
+        logger.info("Creating new progress")
+        new_progress = Progress(
+            user_id=current_user_id,
+            current_day=1,
+            current_belt_id=1,  # Start with white belt
+            completed_days=[]
+        )
         
-        db = get_db()
-        cursor = db.cursor()
+        db.session.add(new_progress)
+        db.session.commit()
         
-        # Get current progress and belt info
-        cursor.execute('''
-            SELECT up.completed_days, up.current_day, up.current_belt_id, b.start_day, b.days_required
-            FROM user_progress up
-            JOIN belts b ON up.current_belt_id = b.id
-            WHERE up.user_id = ?
-        ''', (current_user_id,))
+        progress_dict = new_progress.to_dict()
+        logger.info(f"Created new progress: {progress_dict}")
+        return jsonify(progress_dict), 201
         
-        progress = cursor.fetchone()
-        
-        if not progress:
-            return jsonify({'error': 'Progress not found'}), 404
-            
-        completed_days = json.loads(progress[0]) if progress[0] else []
-        current_day = progress[1]
-        current_belt_id = progress[2]
-        belt_start_day = progress[3]
-        belt_days_required = progress[4]
-        
-        if success:
-            # Add completed day if not already present
-            if day not in completed_days:
-                completed_days.append(day)
-                completed_days.sort()
-            
-            # Update current_day if this is a new completion
-            next_day = day + 1
-            if next_day > current_day:
-                current_day = next_day
-            
-            # Check if we need to advance to next belt
-            days_completed_in_belt = len([d for d in completed_days if belt_start_day <= d < belt_start_day + belt_days_required])
-            
-            if days_completed_in_belt >= belt_days_required:
-                # Get next belt info
-                cursor.execute('''
-                    SELECT id, start_day 
-                    FROM belts 
-                    WHERE start_day > ? 
-                    ORDER BY start_day 
-                    LIMIT 1
-                ''', (belt_start_day,))
-                
-                next_belt = cursor.fetchone()
-                if next_belt:
-                    current_belt_id = next_belt[0]
-                    belt_start_day = next_belt[1]
-        
-        # Update progress in database
-        cursor.execute('''
-            UPDATE user_progress 
-            SET completed_days = ?,
-                current_day = ?,
-                current_belt_id = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        ''', (json.dumps(completed_days), current_day, current_belt_id, current_user_id))
-        
-        db.commit()
-        
-        # Get updated belt info for response
-        cursor.execute('SELECT * FROM belts WHERE id = ?', (current_belt_id,))
-        belt = cursor.fetchone()
-        belt_info = {
-            'name': belt[1],
-            'color': belt[2],
-            'start_day': belt[3],
-            'days_required': belt[4],
-            'description': belt[5]
-        }
-        
-        return jsonify({
-            'success': True,
-            'completed_days': completed_days,
-            'current_day': current_day,
-            'current_belt': belt_info,
-            'next_day': next_day if next_day <= 100 else None
-        })
-            
     except Exception as e:
-        logger.error(f"Error updating progress: {str(e)}", exc_info=True)
+        logger.error(f"Error initializing progress: {str(e)}", exc_info=True)
         return jsonify({
             'error': True,
-            'message': f'Error updating progress: {str(e)}'
+            'message': f'Error initializing progress: {str(e)}'
         }), 500
 
-# Parent routes
 @app.route('/api/parent/children', methods=['GET'])
 @jwt_required()
 @parent_required
@@ -764,16 +761,51 @@ def get_child_progress(child_id):
     if not child:
         return jsonify({"error": "Child not found or access denied"}), 404
     
-    progress = get_user_progress(child_id)
-    return jsonify({
-        "child": {
-            "name": child.name,
-            "email": child.email,
-            "current_belt": child.current_belt,
-            "completed_lessons": child.completed_lessons,
-            "progress": progress
+    progress = Progress.query.filter_by(user_id=child_id).first()
+    if not progress:
+        logger.info(f"No progress found for child {child_id}, creating initial progress")
+        progress = Progress(
+            user_id=child_id,
+            current_day=1,
+            completed_days=[],
+            current_belt_id=1
+        )
+        db.session.add(progress)
+        db.session.commit()
+
+    belts = Belt.query.order_by(Belt.start_day).all()
+    current_belt = Belt.query.get(progress.current_belt_id)
+
+    response_data = {
+        'child': {
+            'name': child.name,
+            'email': child.email,
+            'current_belt': current_belt.name,
+            'completed_lessons': child.completed_lessons,
+            'progress': {
+                'completed_days': progress.completed_days,
+                'current_day': progress.current_day,
+                'current_belt': {
+                    'id': current_belt.id,
+                    'name': current_belt.name,
+                    'color': current_belt.color,
+                    'start_day': current_belt.start_day,
+                    'days_required': current_belt.days_required,
+                    'description': current_belt.description
+                },
+                'all_belts': [{
+                    'id': belt.id,
+                    'name': belt.name,
+                    'color': belt.color,
+                    'start_day': belt.start_day,
+                    'days_required': belt.days_required,
+                    'description': belt.description
+                } for belt in belts]
+            }
         }
-    })
+    }
+    
+    return jsonify(response_data)
 
 @app.route('/api/parent/child/<int:child_id>/recent-activity', methods=['GET'])
 @jwt_required()
@@ -788,8 +820,7 @@ def get_child_activity(child_id):
     
     # Get recent activity (last 30 days)
     recent_activity = (
-        db.session.query(Progress)
-        .filter(Progress.user_id == child_id)
+        Progress.query.filter(Progress.user_id == child_id)
         .order_by(Progress.timestamp.desc())
         .limit(30)
         .all()
@@ -803,137 +834,167 @@ def get_child_activity(child_id):
         } for activity in recent_activity]
     })
 
+def text_to_speech(text):
+    """Convert text to speech using Google Text-to-Speech"""
+    try:
+        # Create a unique filename
+        filename = f"speech_{uuid.uuid4()}.mp3"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Generate speech
+        tts = gTTS(text=text, lang='en')
+        tts.save(filepath)
+        
+        # Return the URL path to the audio file
+        return f"/api/audio/{filename}"
+    except Exception as e:
+        logger.error(f"Text-to-speech error: {str(e)}")
+        return None
+
+@app.route('/api/sensei/ask', methods=['POST'])
+@jwt_required()
+def ask_sensei():
+    try:
+        logger.info("Received request to /api/sensei/ask")
+        data = request.get_json()
+        logger.info(f"Request data: {data}")
+        
+        # Extract question and context
+        question = data.get('question', '')
+        context = data.get('context', {})
+        if isinstance(context, str):
+            context = {'currentLesson': context}
+        
+        voice_enabled = data.get('voice_enabled', False)
+        
+        if not question:
+            logger.warning("No question provided in request")
+            return jsonify({
+                'error': True,
+                'message': 'No question provided'
+            }), 400
+
+        # Get current lesson context safely
+        current_lesson = context.get('currentLesson', '') if isinstance(context, dict) else str(context)
+        current_code = context.get('currentCode', '') if isinstance(context, dict) else ''
+        student_progress = context.get('studentProgress', {}) if isinstance(context, dict) else {}
+        
+        # Build comprehensive context for AI
+        ai_context = {
+            'lesson': current_lesson,
+            'code': current_code,
+            'progress': student_progress,
+            'previous_interactions': context.get('previousInteractions', []) if isinstance(context, dict) else []
+        }
+        logger.info(f"Built AI context: {ai_context}")
+
+        # Check OpenAI API key
+        if not openai.api_key:
+            logger.error("OpenAI API key is not set!")
+            return jsonify({
+                'error': True,
+                'message': 'OpenAI API key is not configured'
+            }), 500
+
+        logger.info("Attempting to call OpenAI API...")
+        # Call OpenAI API for response
+        try:
+            openai_response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are Sensei, a wise and patient programming mentor specializing in Python. You provide clear, concise explanations and always encourage students to think critically. Keep responses focused and under 3 paragraphs."},
+                    {"role": "user", "content": f"Context: {json.dumps(ai_context)}\nQuestion: {question}"}
+                ],
+                temperature=0.7,
+                max_tokens=500
+            )
+            response_text = openai_response.choices[0].message.content
+            logger.info(f"OpenAI response: {response_text}")
+
+            # Convert response to speech if voice is enabled
+            speech_url = None
+            if voice_enabled:
+                speech_url = text_to_speech(response_text)
+                logger.info(f"Generated speech URL: {speech_url}")
+
+            return jsonify({
+                'response': response_text,
+                'speech_url': speech_url,
+                'context': {
+                    'lesson': current_lesson,
+                    'previousInteractions': context.get('previousInteractions', []) + [
+                        {'question': question, 'answer': response_text}
+                    ]
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            return jsonify({
+                'error': True,
+                'message': f'Failed to generate AI response: {str(e)}'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error in ask_sensei: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': True,
+            'message': f'Failed to process your question: {str(e)}'
+        }), 500
+
+@app.route('/api/audio/<filename>')
+def serve_audio(filename):
+    """Serve audio files"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+import openai
+from gtts import gTTS
+import uuid
+import os
+
+# Configure OpenAI
+openai.api_key = os.environ.get('OPENAI_API_KEY')
+if not openai.api_key:
+    logger.warning("OpenAI API key not found in environment variables!")
+
+# Configure upload folder for audio files
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 def load_curriculum():
     try:
-        # Get the absolute path to curriculum.json
         current_dir = os.path.dirname(os.path.abspath(__file__))
         curriculum_path = os.path.join(current_dir, 'curriculum.json')
-        logger.debug(f"Looking for curriculum at: {curriculum_path}")
-        
+        logger.debug(f"Loading curriculum from: {curriculum_path}")
+
         if not os.path.exists(curriculum_path):
             logger.error(f"curriculum.json not found at {curriculum_path}")
-            # Try looking in the parent directory
-            parent_dir = os.path.dirname(current_dir)
-            curriculum_path = os.path.join(parent_dir, 'curriculum.json')
-            logger.debug(f"Trying parent directory: {curriculum_path}")
-            
-            if not os.path.exists(curriculum_path):
-                logger.error(f"curriculum.json not found in parent directory either")
-                return {"belts": []}
-            
-        logger.debug(f"Reading curriculum from: {curriculum_path}")
-        try:
-            with codecs.open(curriculum_path, 'r', encoding='utf-8-sig') as f:
-                content = f.read()
-                logger.debug(f"File content length: {len(content)} bytes")
-                curriculum = json.loads(content)
-                
-            if not curriculum:
-                logger.error("Curriculum is empty")
-                return {"belts": []}
-                
-            if not isinstance(curriculum, dict):
-                logger.error(f"Curriculum is not a dictionary, got {type(curriculum)}")
-                return {"belts": []}
-                
-            if 'belts' not in curriculum:
-                logger.error("No 'belts' key in curriculum")
-                return {"belts": []}
-                
-            belts = curriculum['belts']
-            if not isinstance(belts, list):
-                logger.error(f"'belts' is not a list, got {type(belts)}")
-                return {"belts": []}
-                
-            logger.info(f"Successfully loaded curriculum with {len(belts)} belts")
-            return curriculum
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {str(e)}")
-            logger.error(f"Problem near position {e.pos}: {content[max(0, e.pos-50):e.pos+50]}")
-            return {"belts": []}
-            
+            return None
+
+        with open(curriculum_path, 'r', encoding='utf-8') as f:
+            curriculum = json.load(f)
+
+        if not curriculum or not isinstance(curriculum, dict) or 'belts' not in curriculum:
+            logger.error("Invalid curriculum format")
+            return None
+
+        # Validate belt structure
+        for belt in curriculum['belts']:
+            if not all(key in belt for key in ['name', 'color', 'startDay', 'endDay', 'days']):
+                logger.error(f"Invalid belt format: {belt.get('name', 'unknown')}")
+                return None
+
+        logger.info(f"Successfully loaded curriculum with {len(curriculum['belts'])} belts")
+        return curriculum
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}")
+        return None
     except Exception as e:
-        logger.error(f"Unexpected error in load_curriculum: {str(e)}", exc_info=True)
-        return {"belts": []}
-
-def get_user_progress(user_id=1):
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
-    if not cursor.fetchone():
-        cursor.execute('INSERT INTO users (id, username) VALUES (?, ?)', (user_id, f'user_{user_id}'))
-        db.commit()
-    
-    cursor.execute('''
-        SELECT current_day, current_belt, completed_days, unlocked_belts
-        FROM user_progress
-        WHERE user_id = ?
-    ''', (user_id,))
-    
-    progress = cursor.fetchone()
-    if not progress:
-        cursor.execute('''
-            INSERT INTO user_progress (user_id)
-            VALUES (?)
-        ''', (user_id,))
-        db.commit()
-        return {
-            'current_day': 1,
-            'current_belt': 'white',
-            'completed_days': [],
-            'unlocked_belts': ['white']
-        }
-    
-    return {
-        'current_day': progress['current_day'],
-        'current_belt': progress['current_belt'],
-        'completed_days': json.loads(progress['completed_days']),
-        'unlocked_belts': json.loads(progress['unlocked_belts'])
-    }
-
-def update_user_progress(user_id, day, success):
-    if not success:
-        return
-    
-    db = get_db()
-    cursor = db.cursor()
-    
-    progress = get_user_progress(user_id)
-    completed_days = progress['completed_days']
-    unlocked_belts = progress['unlocked_belts']
-    
-    if day not in completed_days:
-        completed_days.append(day)
-        completed_days.sort()
-    
-    curriculum = load_curriculum()
-    current_belt = progress['current_belt']
-    
-    for belt in curriculum['belts']:
-        if belt['name'] not in unlocked_belts and len(completed_days) >= belt['requiredDays']:
-            unlocked_belts.append(belt['name'])
-            current_belt = belt['name']
-    
-    cursor.execute('''
-        UPDATE user_progress
-        SET completed_days = ?,
-            current_belt = ?,
-            unlocked_belts = ?,
-            current_day = ?,
-            last_completed_day = ?
-        WHERE user_id = ?
-    ''', (
-        json.dumps(completed_days),
-        current_belt,
-        json.dumps(unlocked_belts),
-        day + 1,
-        day,
-        user_id
-    ))
-    
-    db.commit()
+        logger.error(f"Error loading curriculum: {str(e)}", exc_info=True)
+        return None
 
 def create_demo_accounts():
     with app.app_context():
@@ -1018,6 +1079,14 @@ def login():
         }), 500
 
 if __name__ == '__main__':
-    init_db()
-    create_demo_accounts()  # Create demo accounts on startup
-    app.run(debug=True, port=5000)
+    with app.app_context():
+        # Create tables if they don't exist
+        db.create_all()
+        
+        # Create demo accounts
+        create_demo_accounts()
+        
+        # Initialize curriculum
+        load_curriculum()
+        
+    app.run(debug=True, host='0.0.0.0', port=5000)

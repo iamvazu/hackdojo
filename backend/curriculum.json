@@ -67,15 +67,15 @@
           "title": "String Methods",
           "content": "Python strings come with many useful built-in methods:\n\n1. len(): Get string length\n   length = len('Python')  # 6\n\n2. upper(): Convert to uppercase\n   'python'.upper()  # 'PYTHON'\n\n3. lower(): Convert to lowercase\n   'PYTHON'.lower()  # 'python'\n\n4. strip(): Remove whitespace\n   ' python '.strip()  # 'python'\n\n5. replace(): Replace text\n   'Hello'.replace('H', 'h')  # 'hello'\n\n6. split(): Split string into list\n   'a,b,c'.split(',')  # ['a', 'b', 'c']",
           "exercise": {
-            "title": "String Manipulation",
-            "description": "Create a program that manipulates a given string using various string methods.",
-            "starterCode": "text = '  Python Programming  '\n\n# 1. Remove leading/trailing spaces\n# 2. Convert to uppercase\n# 3. Print the length\n",
-            "hint": "Use strip(), upper(), and len()",
+            "title": "Simple String Methods",
+            "description": "Write a program that converts a string to uppercase and prints it.",
+            "starterCode": "message = 'hello world'\n\n# Convert to uppercase and print\n",
+            "hint": "Use the upper() method",
             "test_cases": [
               {
                 "input": "",
-                "expected": "PYTHON PROGRAMMING\n17\n",
-                "description": "String methods test"
+                "expected": "HELLO WORLD\n",
+                "description": "Simple uppercase test"
               }
             ]
           }
